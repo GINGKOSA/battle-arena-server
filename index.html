@@ -584,13 +584,15 @@ async function pollChallenge() {
   try {
     const data = await api('/challenged');
     if (data.challenge) {
-      if (data.challenge.accepted && data.challenge.room) {
-        // Notre défi a été accepté → rejoindre la room
-        clearInterval(challengePollInterval);
-        document.getElementById('challenge-notif').style.display = 'none';
-        joinRoomAuto(data.challenge.room);
-        return;
-      }
+     if (data.challenge.accepted && data.challenge.room) {
+      clearInterval(challengePollInterval);
+      document.getElementById('challenge-notif').style.display = 'none';
+      // Celui qui a défié devient l'HÔTE
+      roomId = data.challenge.room;
+      isHost = true;
+      await startHost(roomId);
+      return;
+    }
       if (data.challenge.declined) return;
       if (!pendingChallenge || pendingChallenge.fromId !== data.challenge.fromId) {
         pendingChallenge = data.challenge;
@@ -658,7 +660,9 @@ async function acceptChallenge() {
     document.getElementById('challenge-notif').style.display = 'none';
     pendingChallenge = null;
     // On est l'invité → rejoindre la room créée par le serveur
-    joinRoomAuto(data.room);
+    roomId = data.room;
+    isHost = false;
+    await startGuest(roomId);
   } catch { alert('Erreur lors de l\'acceptation.'); }
 }
 
