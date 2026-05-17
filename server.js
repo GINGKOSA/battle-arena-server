@@ -6,7 +6,7 @@ const url = require('url');
 const CLIENT_ID     = '1505615169185779782';
 const CLIENT_SECRET = process.env.DISCORD_SECRET;
 const REDIRECT_URI  = 'https://battle-arena-server-t781.onrender.com/callback';
-const FRONTEND_URL = 'https://gingkosa.github.io/battle-arena-server/battle-multiplayer.html';
+const FRONTEND_URL = process.env.FRONTEND_URL || '*';
 
 /* ═══════════════ STOCKAGE RAM ═══════════════ */
 const rooms   = {};
