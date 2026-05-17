@@ -4,18 +4,17 @@ const url = require('url');
 
 /* ═══════════════ CONFIG ═══════════════ */
 const CLIENT_ID     = '1505615169185779782';
-const CLIENT_SECRET = process.env.DISCORD_SECRET || 'vCyVrqH8neA_WyGugpWCX-e9cGjj2ajC';
+const CLIENT_SECRET = process.env.DISCORD_SECRET;
 const REDIRECT_URI  = 'https://battle-arena-server-t781.onrender.com/callback';
-const FRONTEND      = process.env.FRONTEND_URL || '*';
 
 /* ═══════════════ STOCKAGE RAM ═══════════════ */
-const rooms   = {};   // signaling WebRTC
-const players = {};   // { token: { id, username, avatar, online, challenge } }
-const tokens  = {};   // { discordId: token }
+const rooms   = {};
+const players = {};
+const tokens  = {};
 
 /* ═══════════════ HELPERS ═══════════════ */
 function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', FRONTEND);
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
@@ -34,27 +33,27 @@ function getBody(req) {
   });
 }
 
-function httpsGet(options) {
-  return new Promise((res, rej) => {
-    const req = https.request(options, r => {
-      let data = '';
-      r.on('data', d => data += d);
-      r.on('end', () => res(JSON.parse(data)));
-    });
-    req.on('error', rej);
-    req.end();
-  });
-}
-
 function httpsPost(options, body) {
   return new Promise((res, rej) => {
     const req = https.request(options, r => {
       let data = '';
       r.on('data', d => data += d);
-      r.on('end', () => res(JSON.parse(data)));
+      r.on('end', () => { try { res(JSON.parse(data)); } catch { res({}); } });
     });
     req.on('error', rej);
     req.write(body);
+    req.end();
+  });
+}
+
+function httpsGet(options) {
+  return new Promise((res, rej) => {
+    const req = https.request(options, r => {
+      let data = '';
+      r.on('data', d => data += d);
+      r.on('end', () => { try { res(JSON.parse(data)); } catch { res({}); } });
+    });
+    req.on('error', rej);
     req.end();
   });
 }
@@ -63,17 +62,22 @@ function randToken() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
+function randRoom() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+}
+
 function getPlayer(req) {
   const auth = req.headers['authorization'] || '';
-  const token = auth.replace('Bearer ', '');
-  return players[token] || null;
+  const token = auth.replace('Bearer ', '').trim();
+  return token ? players[token] : null;
 }
 
 /* ═══════════════ NETTOYAGE ═══════════════ */
 setInterval(() => {
   const now = Date.now();
   Object.keys(players).forEach(t => {
-    if (now - players[t].lastSeen > 30000) {
+    if (now - players[t].lastSeen > 40000) {
       delete tokens[players[t].id];
       delete players[t];
     }
@@ -90,9 +94,7 @@ http.createServer(async (req, res) => {
 
   if (req.method === 'OPTIONS') { cors(res); res.end(); return; }
 
-  /* ── OAuth Discord ── */
-
-  // 1. Redirige vers Discord
+  /* ── LOGIN Discord ── */
   if (path === '/login') {
     const discordUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
     res.writeHead(302, { Location: discordUrl });
@@ -100,11 +102,10 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  // 2. Callback Discord → échange le code contre un token
+  /* ── CALLBACK Discord ── */
   if (path === '/callback') {
     const code = parsed.query.code;
     if (!code) { res.writeHead(302, { Location: '/?error=no_code' }); res.end(); return; }
-
     try {
       const body = new URLSearchParams({
         client_id: CLIENT_ID,
@@ -121,6 +122,8 @@ http.createServer(async (req, res) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
       }, body);
 
+      if (!tokenData.access_token) throw new Error('no token');
+
       const userData = await httpsGet({
         hostname: 'discord.com',
         path: '/api/users/@me',
@@ -128,13 +131,14 @@ http.createServer(async (req, res) => {
       });
 
       const myToken = randToken();
+      const avatar = userData.avatar
+        ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+        : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || 0) % 5}.png`;
+
       players[myToken] = {
         id: userData.id,
-        username: userData.username,
-        avatar: userData.avatar
-          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
-          : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.id) % 5}.png`,
-        online: true,
+        username: userData.global_name || userData.username,
+        avatar,
         lastSeen: Date.now(),
         challenge: null
       };
@@ -142,16 +146,15 @@ http.createServer(async (req, res) => {
 
       res.writeHead(302, { Location: `/?token=${myToken}` });
       res.end();
-    } catch (e) {
+    } catch(e) {
+      console.error('OAuth error:', e);
       res.writeHead(302, { Location: '/?error=oauth_failed' });
       res.end();
     }
     return;
   }
 
-  /* ── API joueur ── */
-
-  // Infos du joueur connecté
+  /* ── /me ── */
   if (path === '/me' && req.method === 'GET') {
     const p = getPlayer(req);
     if (!p) { json(res, { error: 'unauthorized' }, 401); return; }
@@ -160,31 +163,31 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  // Liste des joueurs en ligne
+  /* ── /online ── */
   if (path === '/online' && req.method === 'GET') {
     const me = getPlayer(req);
     if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
     me.lastSeen = Date.now();
     const list = Object.values(players)
       .filter(p => p.id !== me.id)
-      .map(p => ({ id: p.id, username: p.username, avatar: p.avatar, challenge: p.challenge }));
+      .map(p => ({ id: p.id, username: p.username, avatar: p.avatar, challenged: !!p.challenge }));
     json(res, list);
     return;
   }
 
-  // Défier un joueur
+  /* ── /challenge/:id ── */
   if (path.startsWith('/challenge/') && req.method === 'POST') {
     const me = getPlayer(req);
     if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
     const targetId = path.split('/')[2];
     const targetToken = tokens[targetId];
     if (!targetToken || !players[targetToken]) { json(res, { error: 'not_found' }, 404); return; }
-    players[targetToken].challenge = { from: me.username, fromId: me.id, room: null };
+    players[targetToken].challenge = { from: me.username, fromId: me.id, avatar: me.avatar };
     json(res, { ok: true });
     return;
   }
 
-  // Vérifier si on est défié
+  /* ── /challenged ── */
   if (path === '/challenged' && req.method === 'GET') {
     const me = getPlayer(req);
     if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
@@ -193,24 +196,30 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  // Accepter un défi → crée la room
+  /* ── /accept ── */
   if (path === '/accept' && req.method === 'POST') {
     const me = getPlayer(req);
     if (!me || !me.challenge) { json(res, { error: 'no_challenge' }, 400); return; }
-    const roomCode = randToken().slice(0, 4).toUpperCase();
+    const room = randRoom();
     const challengerToken = tokens[me.challenge.fromId];
     if (challengerToken && players[challengerToken]) {
-      players[challengerToken].challenge = { accepted: true, room: roomCode };
+      players[challengerToken].challenge = { accepted: true, room };
     }
     me.challenge = null;
-    json(res, { room: roomCode });
+    json(res, { room });
     return;
   }
 
-  // Refuser un défi
+  /* ── /decline ── */
   if (path === '/decline' && req.method === 'POST') {
     const me = getPlayer(req);
     if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    if (me.challenge) {
+      const challengerToken = tokens[me.challenge.fromId];
+      if (challengerToken && players[challengerToken]) {
+        players[challengerToken].challenge = { declined: true };
+      }
+    }
     me.challenge = null;
     json(res, { ok: true });
     return;
@@ -218,7 +227,7 @@ http.createServer(async (req, res) => {
 
   /* ── Signaling WebRTC ── */
   const room = path.slice(1).toUpperCase();
-  if (!room) { cors(res); res.end('Battle Arena Server'); return; }
+  if (!room) { cors(res); res.end('Battle Arena Server OK'); return; }
 
   if (req.method === 'POST') {
     const body = await getBody(req);
@@ -237,4 +246,4 @@ http.createServer(async (req, res) => {
 
   cors(res); res.writeHead(404); res.end('Not found');
 
-}).listen(process.env.PORT || 3000, () => console.log('Battle Arena Server running'));
+}).listen(process.env.PORT || 3000, () => console.log('Battle Arena Server running on port', process.env.PORT || 3000));
