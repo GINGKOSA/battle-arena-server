@@ -103,66 +103,61 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  /* ── CALLBACK Discord ── */
-  if (path === '/callback') {
-    const code = parsed.query.code;
-    if (!code) { res.writeHead(302, { Location: 'https://gingkosa.github.io/battle-arena-server/?error=no_code' }); res.end(); return; }
-    try {
-      const body = new URLSearchParams({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: REDIRECT_URI
-      }).toString();
-
-      const tokenData = await httpsPost({
-        hostname: 'discord.com',
-        path: '/api/oauth2/token',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
-      }, body);
-
-      if (!tokenData.access_token) throw new Error('no token');
-
-      const userData = await httpsGet({
-        hostname: 'discord.com',
-        path: '/api/users/@me',
-        headers: { Authorization: `Bearer ${tokenData.access_token}` }
-      });
-
-      const myToken = randToken();
-      const avatar = userData.avatar
-        ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
-        : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || 0) % 5}.png`;
-
-      players[myToken] = {
-        id: userData.id,
-        username: userData.global_name || userData.username,
-        avatar,
-        lastSeen: Date.now(),
-        challenge: null
-      };
-      tokens[userData.id] = myToken;
-
-      res.writeHead(302, { Location: `https://gingkosa.github.io/battle-arena-server/?token=${myToken}` });
-      res.end();
-    } catch(e) {
-      console.error('OAuth error:', e);
-      res.writeHead(302, { Location: 'https://gingkosa.github.io/battle-arena-server/?error=oauth_failed' });
-      res.end();
-    }
-    return;
+ /* ── CALLBACK Discord ── */
+if (path === '/callback') {
+  const code = parsed.query.code;
+  if (!code) { 
+    res.writeHead(302, { Location: 'https://gingkosa.github.io/battle-arena-server/?error=no_code' }); 
+    res.end(); 
+    return; 
   }
+  try {
+    const body = new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI
+    }).toString();
 
-  /* ── /me ── */
-  if (path === '/me' && req.method === 'GET') {
-    const p = getPlayer(req);
-    if (!p) { json(res, { error: 'unauthorized' }, 401); return; }
-    p.lastSeen = Date.now();
-    json(res, { id: p.id, username: p.username, avatar: p.avatar });
-    return;
+    const tokenData = await httpsPost({
+      hostname: 'discord.com',
+      path: '/api/oauth2/token',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+    }, body);
+
+    if (!tokenData.access_token) throw new Error('no token');
+
+    const userData = await httpsGet({
+      hostname: 'discord.com',
+      path: '/api/users/@me',
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+
+    const myToken = randToken();
+    const avatar = userData.avatar
+      ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+      : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || 0) % 5}.png`;
+
+    players[myToken] = {
+      id: userData.id,
+      username: userData.global_name || userData.username,
+      avatar,
+      lastSeen: Date.now(),
+      challenge: null
+    };
+    tokens[userData.id] = myToken;
+
+    res.writeHead(302, { Location: `https://gingkosa.github.io/battle-arena-server/?token=${myToken}` });
+    res.end();
+  } catch(e) {
+    console.error('OAuth error:', e);
+    res.writeHead(302, { Location: 'https://gingkosa.github.io/battle-arena-server/?error=oauth_failed' });
+    res.end();
   }
+  return;
+}
 
   /* ── /online ── */
   if (path === '/online' && req.method === 'GET') {
