@@ -220,8 +220,11 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  const room = path.slice(1).toUpperCase();
-  if (!room) { cors(res); res.end('Battle Arena Server OK'); return; }
+// Ne traite comme room WebRTC que si c'est exactement 4 lettres majuscules
+const room = path.slice(1).toUpperCase();
+if (!room || !/^[A-Z]{4}(-OFFER|-ANSWER)?$/.test(room)) {
+  cors(res); res.writeHead(404); res.end('Not found'); return;
+}
 
   if (req.method === 'POST') {
     const body = await getBody(req);
