@@ -106,7 +106,7 @@ http.createServer(async (req, res) => {
   /* ── CALLBACK Discord ── */
   if (path === '/callback') {
     const code = parsed.query.code;
-    if (!code) { res.writeHead(302, { Location: '/?error=no_code' }); res.end(); return; }
+    if (!code) { res.writeHead(302, { Location: 'https://gingkosa.github.io/battle-arena-server/?error=no_code' }); res.end(); return; }
     try {
       const body = new URLSearchParams({
         client_id: CLIENT_ID,
@@ -145,11 +145,11 @@ http.createServer(async (req, res) => {
       };
       tokens[userData.id] = myToken;
 
-      res.writeHead(302, { Location: `/?token=${myToken}` });
+      res.writeHead(302, { Location: `https://gingkosa.github.io/battle-arena-server/?token=${myToken}` });
       res.end();
     } catch(e) {
       console.error('OAuth error:', e);
-      res.writeHead(302, { Location: '/?error=oauth_failed' });
+      res.writeHead(302, { Location: 'https://gingkosa.github.io/battle-arena-server/?error=oauth_failed' });
       res.end();
     }
     return;
