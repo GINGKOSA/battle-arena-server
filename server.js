@@ -98,7 +98,7 @@ http.createServer(async (req, res) => {
   /* ── LOGIN Discord ── */
   if (path === '/login') {
     const discordUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
-    res.writeHead(302, { Location: discordUrl });
+    res.writeHead(302, { Location: `https://gingkosa.github.io/battle-arena-server/?token=${myToken}` });
     res.end();
     return;
   }
