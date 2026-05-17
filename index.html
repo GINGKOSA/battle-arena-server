@@ -1,1096 +1,245 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Battle Arena — Multijoueur P2P</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&family=Orbitron:wght@500;700&display=swap');
+const http = require('http');
+const https = require('https');
+const url = require('url');
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+const CLIENT_ID     = '1505615169185779782';
+const CLIENT_SECRET = process.env.DISCORD_SECRET;
+const REDIRECT_URI  = 'https://battle-arena-server-t781.onrender.com/callback';
+const FRONTEND      = 'https://gingkosa.github.io/battle-arena-server';
 
-    :root {
-      --fire: #ff5522;
-      --ice: #22aaff;
-      --bg: #0d0d1a;
-      --panel: #13132a;
-      --panel2: #1a1a35;
-      --border: #2a2a4a;
-      --text: #e8e8ff;
-      --muted: #7777aa;
-      --hp-high: #1D9E75;
-      --hp-mid: #EF9F27;
-      --hp-low: #E24B4A;
-      --discord: #5865F2;
-    }
+const rooms   = {};
+const players = {};
+const tokens  = {};
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-
-    h1 {
-      font-family: 'Orbitron', sans-serif;
-      font-size: clamp(13px, 2.5vw, 18px);
-      letter-spacing: 0.15em;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 14px;
-      text-align: center;
-    }
-
-    #app { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 12px; }
-
-    .btn {
-      padding: 10px 22px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--panel2);
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s;
-    }
-    .btn:hover { background: #22224a; border-color: var(--fire); }
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.4; cursor: default; transform: none; }
-    .btn.primary { background: var(--fire); border-color: var(--fire); color: #fff; }
-    .btn.primary:hover { background: #ff6633; }
-    .btn.ice { background: var(--ice); border-color: var(--ice); color: #fff; }
-    .btn.discord { background: var(--discord); border-color: var(--discord); color: #fff; font-size: 15px; padding: 12px 28px; }
-    .btn.discord:hover { background: #4752c4; border-color: #4752c4; }
-    .btn.small { padding: 6px 14px; font-size: 12px; }
-    .btn.danger { background: rgba(226,75,74,0.15); border-color: var(--hp-low); color: var(--hp-low); }
-    .btn.danger:hover { background: rgba(226,75,74,0.25); }
-
-    /* ── LOGIN ── */
-    #login-screen {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 40px 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      text-align: center;
-    }
-
-    .login-title { font-family: 'Orbitron', sans-serif; font-size: 20px; color: var(--text); }
-    .login-sub { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 400px; }
-
-    /* ── LOBBY ── */
-    #lobby-screen { display: none; flex-direction: column; gap: 12px; }
-
-    /* Profil */
-    #profile-bar {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .profile-avatar {
-      width: 38px; height: 38px;
-      border-radius: 50%;
-      border: 2px solid var(--discord);
-      object-fit: cover;
-      flex-shrink: 0;
-    }
-
-    .profile-name { font-weight: 600; font-size: 14px; color: var(--text); }
-    .profile-status { font-size: 11px; color: var(--hp-high); }
-    .profile-logout { margin-left: auto; }
-
-    /* Joueurs en ligne */
-    #players-panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-    }
-
-    #players-header {
-      padding: 12px 18px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    #players-title {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 12px;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      text-transform: uppercase;
-    }
-
-    #online-count {
-      font-size: 11px;
-      color: var(--muted);
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      border-radius: 99px;
-      padding: 2px 10px;
-    }
-
-    #players-list { display: flex; flex-direction: column; }
-
-    .player-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 18px;
-      border-bottom: 1px solid var(--border);
-      transition: background 0.15s;
-    }
-    .player-row:last-child { border-bottom: none; }
-    .player-row:hover { background: var(--panel2); }
-
-    .player-avatar {
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-      border: 1px solid var(--border);
-    }
-
-    .player-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; }
-
-    #players-empty {
-      padding: 24px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--muted);
-      font-style: italic;
-    }
-
-    /* Room manuelle */
-    #manual-panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .manual-title {
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    .room-row { display: flex; gap: 8px; align-items: center; }
-
-    #room-input {
-      flex: 1;
-      background: #0a0a18;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 18px;
-      letter-spacing: 0.2em;
-      color: var(--text);
-      outline: none;
-      text-transform: uppercase;
-      text-align: center;
-    }
-    #room-input:focus { border-color: var(--ice); }
-    #room-input::placeholder { font-size: 13px; letter-spacing: 0.05em; font-family: 'Exo 2', sans-serif; color: var(--muted); }
-
-    /* Notif défi entrant */
-    #challenge-notif {
-      display: none;
-      background: var(--panel);
-      border: 2px solid var(--fire);
-      border-radius: 14px;
-      padding: 16px 18px;
-      flex-direction: column;
-      gap: 12px;
-      animation: glow-border 1s ease-in-out infinite alternate;
-    }
-    @keyframes glow-border { from { border-color: var(--fire); } to { border-color: var(--ice); } }
-
-    .notif-title { font-family: 'Orbitron', sans-serif; font-size: 13px; color: var(--text); }
-    .notif-from { font-size: 14px; color: var(--fire); font-weight: 700; display: flex; align-items: center; gap: 10px; }
-    .notif-from img { width: 32px; height: 32px; border-radius: 50%; }
-    .notif-btns { display: flex; gap: 8px; }
-
-    /* Attente room */
-    #waiting-room {
-      display: none;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 24px;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      text-align: center;
-    }
-
-    .room-badge {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 36px;
-      letter-spacing: 0.2em;
-      color: var(--fire);
-    }
-
-    .waiting { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; justify-content: center; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hp-mid); animation: pulse 1s infinite; flex-shrink: 0; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-    /* ── GAME ── */
-    #game { display: none; flex-direction: column; gap: 12px; }
-
-    #canvas-container {
-      width: 100%;
-      aspect-ratio: 16/9;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      position: relative;
-      background: #1a1a2e;
-    }
-
-    #battle-canvas { width: 100%; height: 100%; display: block; }
-
-    #overlay {
-      position: absolute; inset: 0;
-      display: none;
-      flex-direction: column;
-      align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.65);
-      border-radius: 12px;
-      gap: 16px;
-    }
-
-    #overlay-text {
-      font-family: 'Orbitron', sans-serif;
-      color: #fff;
-      font-size: clamp(20px,5vw,36px);
-      text-align: center;
-      line-height: 1.4;
-      white-space: pre-line;
-    }
-
-    .hud { display: flex; gap: 12px; align-items: stretch; }
-    .fighter-hud { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
-    .fighter-hud.enemy { text-align: right; }
-    .fighter-name { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fighter-hud:not(.enemy) .fighter-name { color: var(--fire); }
-    .fighter-hud.enemy .fighter-name { color: var(--ice); }
-    .hp-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-    .hp-bar-bg { height: 8px; border-radius: 99px; background: #1a1a3a; overflow: hidden; border: 1px solid var(--border); }
-    .hp-bar { height: 100%; border-radius: 99px; transition: width 0.5s ease, background 0.5s; }
-    .hp-bar.high { background: var(--hp-high); }
-    .hp-bar.mid  { background: var(--hp-mid); }
-    .hp-bar.low  { background: var(--hp-low); box-shadow: 0 0 6px var(--hp-low); }
-    .hp-val { font-size: 12px; color: var(--muted); margin-top: 5px; }
-    .vs-badge { align-self: center; font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; color: var(--muted); padding: 0 4px; }
-
-    .log { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 14px; min-height: 56px; line-height: 1.6; }
-    .turn-badge { display: inline-block; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 10px; border-radius: 99px; margin-bottom: 4px; font-weight: 600; }
-    .turn-badge.mine   { background: rgba(255,85,34,0.18); color: var(--fire); border: 1px solid rgba(255,85,34,0.4); }
-    .turn-badge.theirs { background: rgba(34,170,255,0.18); color: var(--ice); border: 1px solid rgba(34,170,255,0.4); }
-
-    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .action-btn {
-      padding: 11px 12px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      font-size: 14px;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .action-btn:hover:not(:disabled) { background: #1e1e3a; border-color: var(--fire); }
-    .action-btn:active:not(:disabled) { transform: scale(0.97); }
-    .action-btn:disabled { opacity: 0.35; cursor: default; }
-    .action-btn .dmg { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
-
-    #chat-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
-    #chat-header { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-    #chat-messages { height: 130px; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
-    #chat-messages::-webkit-scrollbar { width: 4px; }
-    #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-    .chat-msg { font-size: 13px; line-height: 1.5; display: flex; gap: 6px; align-items: baseline; }
-    .chat-msg .who { font-weight: 700; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
-    .chat-msg.me .who   { color: var(--fire); }
-    .chat-msg.them .who { color: var(--ice); }
-    .chat-msg .txt { color: var(--text); word-break: break-word; }
-    .chat-msg.system { font-size: 11px; color: var(--muted); font-style: italic; justify-content: center; }
-    #chat-input-row { display: flex; border-top: 1px solid var(--border); }
-    #chat-input { flex: 1; background: transparent; border: none; outline: none; padding: 10px 14px; font-family: 'Exo 2', sans-serif; font-size: 13px; color: var(--text); }
-    #chat-input::placeholder { color: var(--muted); }
-    #chat-send { padding: 8px 16px; background: transparent; border: none; border-left: 1px solid var(--border); color: var(--muted); font-size: 16px; cursor: pointer; transition: color 0.15s, background 0.15s; }
-    #chat-send:hover { color: var(--text); background: var(--panel2); }
-
-    footer { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; letter-spacing: 0.05em; }
-  </style>
-</head>
-<body>
-
-<div id="app">
-  <h1>⚔️ Battle Arena</h1>
-
-  <!-- ── LOGIN ── -->
-  <div id="login-screen">
-    <div class="login-title">Connexion requise</div>
-    <div class="login-sub">Connecte-toi avec Discord pour voir tes amis en ligne et les défier en combat !</div>
-    <button class="btn discord" onclick="login()">
-      <svg width="20" height="20" viewBox="0 0 71 55" fill="white" style="vertical-align:middle;margin-right:8px"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4a40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.4 0A39.5 39.5 0 0 0 25.5.4 58.4 58.4 0 0 0 10.8 5C1.6 18.8-1 32.2.3 45.4a58.9 58.9 0 0 0 18 9.1 42.2 42.2 0 0 0 3.6-5.9 38.4 38.4 0 0 1-6.1-2.9l1.5-1.1a41.9 41.9 0 0 0 36.2 0l1.5 1.1a38.2 38.2 0 0 1-6.1 2.9 42 42 0 0 0 3.6 5.9 58.7 58.7 0 0 0 18-9.1C72 30 68.1 16.7 60.1 4.9ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Z"/></svg>
-      Se connecter avec Discord
-    </button>
-    <div style="font-size:12px;color:var(--muted)">ou</div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
-      <input id="room-input-anon" type="text" maxlength="4" placeholder="Code room" style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:Orbitron,sans-serif;font-size:18px;letter-spacing:0.2em;color:var(--text);outline:none;text-transform:uppercase;text-align:center;width:140px" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
-      <button class="btn ice" onclick="joinAnon()">🔗 Rejoindre</button>
-      <button class="btn primary" onclick="createAnon()">⚔️ Créer</button>
-    </div>
-  </div>
-
-  <!-- ── LOBBY ── -->
-  <div id="lobby-screen">
-
-    <!-- Profil -->
-    <div id="profile-bar">
-      <img class="profile-avatar" id="profile-avatar" src="" alt="avatar"/>
-      <div>
-        <div class="profile-name" id="profile-name">...</div>
-        <div class="profile-status">🟢 En ligne</div>
-      </div>
-      <button class="btn small danger profile-logout" onclick="logout()">Déconnexion</button>
-    </div>
-
-    <!-- Notif défi entrant -->
-    <div id="challenge-notif">
-      <div class="notif-title">⚔️ Défi reçu !</div>
-      <div class="notif-from">
-        <img id="notif-avatar" src="" alt=""/>
-        <span id="notif-name">...</span> te défie en combat !
-      </div>
-      <div class="notif-btns">
-        <button class="btn primary" onclick="acceptChallenge()">✅ Accepter</button>
-        <button class="btn danger" onclick="declineChallenge()">❌ Refuser</button>
-      </div>
-    </div>
-
-    <!-- Joueurs en ligne -->
-    <div id="players-panel">
-      <div id="players-header">
-        <div id="players-title">🌐 Joueurs en ligne</div>
-        <span id="online-count">0 joueur</span>
-      </div>
-      <div id="players-list"></div>
-      <div id="players-empty">Aucun autre joueur en ligne pour l'instant…</div>
-    </div>
-
-    <!-- Room manuelle -->
-    <div id="manual-panel">
-      <div class="manual-title">Rejoindre par code</div>
-      <div class="room-row">
-        <input id="room-input" type="text" maxlength="4" placeholder="Ex: FIRE" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
-        <button class="btn ice" onclick="joinRoom()">🔗 Rejoindre</button>
-        <button class="btn primary" onclick="createRoom()">⚔️ Créer</button>
-      </div>
-    </div>
-
-    <!-- Attente room -->
-    <div id="waiting-room">
-      <div style="font-size:13px;color:var(--muted)">Code de la partie</div>
-      <div class="room-badge" id="room-code-display">????</div>
-      <div class="waiting"><span class="dot"></span><span id="wait-status">En attente de l'adversaire…</span></div>
-      <button class="btn small danger" onclick="cancelWait()">Annuler</button>
-    </div>
-
-  </div>
-
-  <!-- ── GAME ── -->
-  <div id="game">
-    <div id="canvas-container">
-      <canvas id="battle-canvas"></canvas>
-      <div id="overlay">
-        <div id="overlay-text"></div>
-        <button class="btn" onclick="location.reload()">↺ Rejouer</button>
-      </div>
-    </div>
-
-    <div class="hud">
-      <div class="fighter-hud">
-        <div class="fighter-name" id="my-name">⚔️ Toi</div>
-        <div class="hp-label">PV</div>
-        <div class="hp-bar-bg"><div class="hp-bar high" id="p-bar" style="width:100%"></div></div>
-        <div class="hp-val" id="p-val">100 / 100</div>
-      </div>
-      <div class="vs-badge">VS</div>
-      <div class="fighter-hud enemy">
-        <div class="fighter-name" id="their-name">Adversaire 🧊</div>
-        <div class="hp-label">PV</div>
-        <div class="hp-bar-bg"><div class="hp-bar high" id="e-bar" style="width:100%"></div></div>
-        <div class="hp-val" id="e-val">100 / 100</div>
-      </div>
-    </div>
-
-    <div class="log">
-      <span class="turn-badge mine" id="turn-badge">Ton tour</span><br>
-      <span id="log-text">Connexion établie — que le combat commence !</span>
-    </div>
-
-    <div class="actions" id="action-panel">
-      <button class="action-btn" onclick="doAction('Flamme','🔥',20,0.9)">🔥 Flamme <span class="dmg">20 dmg · 90%</span></button>
-      <button class="action-btn" onclick="doAction('Inferno','💥',40,0.6)">💥 Inferno <span class="dmg">40 dmg · 60%</span></button>
-      <button class="action-btn" onclick="doAction('Brûlure','🌋',15,1.0)">🌋 Brûlure <span class="dmg">15 dmg · 100%</span></button>
-      <button class="action-btn" onclick="doAction('Soin','💚',0,1,true)">💚 Soin <span class="dmg">+25 PV</span></button>
-    </div>
-
-    <div id="chat-panel">
-      <div id="chat-header">💬 Chat</div>
-      <div id="chat-messages">
-        <div class="chat-msg system">Connexion établie — dites bonjour !</div>
-      </div>
-      <div id="chat-input-row">
-        <input id="chat-input" type="text" placeholder="Écris un message…" maxlength="200" onkeydown="if(event.key==='Enter') sendChat()"/>
-        <button id="chat-send" onclick="sendChat()">➤</button>
-      </div>
-    </div>
-  </div>
-
-  <footer>WebRTC P2P · Discord OAuth · Render · 100% HTML / JS / CSS</footer>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-/* ═══════════════ CONFIG ═══════════════ */
-const SIGNAL = 'https://battle-arena-server-t781.onrender.com';
-const ICE = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' }
-];
-
-/* ═══════════════ STATE ═══════════════ */
-let myToken = localStorage.getItem('battle_token') || null;
-let myProfile = null;
-let pollInterval = null;
-let challengePollInterval = null;
-let pendingChallenge = null;
-let pc, dc, isHost = false, roomId = '';
-
-/* ═══════════════ AUTH ═══════════════ */
-function login() {
-  window.location.href = SIGNAL + '/login';
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-function logout() {
-  localStorage.removeItem('battle_token');
-  myToken = null; myProfile = null;
-  stopPolls();
-  showScreen('login');
+function json(res, data, status = 200) {
+  cors(res);
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
 }
 
-async function api(path, method = 'GET', body = null) {
-  const opts = {
-    method,
-    headers: { 'Authorization': 'Bearer ' + myToken, 'Content-Type': 'application/json' }
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(SIGNAL + path, opts);
-  return r.json();
-}
-
-async function initAuth() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
-  const error = params.get('error');
-
-  if (token) {
-    myToken = token;
-    localStorage.setItem('battle_token', token);
-    window.history.replaceState({}, '', window.location.pathname);
-  }
-
-  if (error) {
-    alert('Erreur de connexion Discord. Réessaie !');
-    showScreen('login');
-    return;
-  }
-
-  if (!myToken) { showScreen('login'); return; }
-
-  try {
-    myProfile = await api('/me');
-    if (myProfile.error) { myToken = null; localStorage.removeItem('battle_token'); showScreen('login'); return; }
-    document.getElementById('profile-avatar').src = myProfile.avatar;
-    document.getElementById('profile-name').textContent = myProfile.username;
-    showScreen('lobby');
-    startPolls();
-  } catch {
-    showScreen('login');
-  }
-}
-
-/* ═══════════════ SCREENS ═══════════════ */
-function showScreen(name) {
-  document.getElementById('login-screen').style.display  = name === 'login'  ? 'flex' : 'none';
-  document.getElementById('lobby-screen').style.display  = name === 'lobby'  ? 'flex' : 'none';
-  document.getElementById('game').style.display          = name === 'game'   ? 'flex' : 'none';
-}
-
-/* ═══════════════ POLLING ═══════════════ */
-function startPolls() {
-  pollOnline();
-  pollInterval = setInterval(pollOnline, 5000);
-  challengePollInterval = setInterval(pollChallenge, 3000);
-}
-
-function stopPolls() {
-  clearInterval(pollInterval);
-  clearInterval(challengePollInterval);
-}
-
-async function pollOnline() {
-  if (!myToken) return;
-  try {
-    const list = await api('/online');
-    renderPlayers(list);
-  } catch {}
-}
-
-async function pollChallenge() {
-  if (!myToken) return;
-  try {
-    const data = await api('/challenged');
-    if (data.challenge) {
-      if (data.challenge.accepted && data.challenge.room) {
-        // Notre défi a été accepté → rejoindre la room
-        clearInterval(challengePollInterval);
-        document.getElementById('challenge-notif').style.display = 'none';
-        joinRoomAuto(data.challenge.room);
-        return;
-      }
-      if (data.challenge.declined) return;
-      if (!pendingChallenge || pendingChallenge.fromId !== data.challenge.fromId) {
-        pendingChallenge = data.challenge;
-        showChallengeNotif(data.challenge);
-      }
-    } else {
-      hideChallengeNotif();
-    }
-  } catch {}
-}
-
-/* ═══════════════ JOUEURS EN LIGNE ═══════════════ */
-function renderPlayers(list) {
-  const container = document.getElementById('players-list');
-  const empty = document.getElementById('players-empty');
-  const count = document.getElementById('online-count');
-
-  count.textContent = list.length + (list.length <= 1 ? ' joueur' : ' joueurs');
-
-  if (list.length === 0) {
-    container.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  container.innerHTML = '';
-
-  list.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    row.innerHTML = `
-      <img class="player-avatar" src="${p.avatar}" alt="${p.username}" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
-      <div class="player-name">${p.username}</div>
-      <button class="btn small primary" onclick="challengePlayer('${p.id}')" ${p.challenged ? 'disabled' : ''}>
-        ${p.challenged ? '⏳ Occupé' : '⚔️ Défier'}
-      </button>
-    `;
-    container.appendChild(row);
+function getBody(req) {
+  return new Promise(res => {
+    let body = '';
+    req.on('data', d => body += d);
+    req.on('end', () => res(body));
   });
 }
 
-async function challengePlayer(targetId) {
-  try {
-    await api('/challenge/' + targetId, 'POST');
-    // Attendre que la cible accepte via pollChallenge
-  } catch { alert('Impossible de défier ce joueur.'); }
+function httpsPost(options, body) {
+  return new Promise((res, rej) => {
+    const req = https.request(options, r => {
+      let data = '';
+      r.on('data', d => data += d);
+      r.on('end', () => { try { res(JSON.parse(data)); } catch { res({}); } });
+    });
+    req.on('error', rej);
+    req.write(body);
+    req.end();
+  });
 }
 
-/* ═══════════════ NOTIF DÉFI ═══════════════ */
-function showChallengeNotif(challenge) {
-  document.getElementById('notif-avatar').src = challenge.avatar || '';
-  document.getElementById('notif-name').textContent = challenge.from;
-  document.getElementById('challenge-notif').style.display = 'flex';
+function httpsGet(options) {
+  return new Promise((res, rej) => {
+    const req = https.request(options, r => {
+      let data = '';
+      r.on('data', d => data += d);
+      r.on('end', () => { try { res(JSON.parse(data)); } catch { res({}); } });
+    });
+    req.on('error', rej);
+    req.end();
+  });
 }
 
-function hideChallengeNotif() {
-  if (!pendingChallenge) return;
-  pendingChallenge = null;
-  document.getElementById('challenge-notif').style.display = 'none';
+function randToken() {
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-async function acceptChallenge() {
-  try {
-    const data = await api('/accept', 'POST');
-    document.getElementById('challenge-notif').style.display = 'none';
-    pendingChallenge = null;
-    // On est l'invité → rejoindre la room créée par le serveur
-    joinRoomAuto(data.room);
-  } catch { alert('Erreur lors de l\'acceptation.'); }
-}
-
-async function declineChallenge() {
-  await api('/decline', 'POST');
-  hideChallengeNotif();
-  pendingChallenge = null;
-}
-
-/* ═══════════════ ROOMS ═══════════════ */
 function randRoom() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   return Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
 }
 
-async function createRoom() {
-  roomId = randRoom();
-  isHost = true;
-  await startHost(roomId);
+function getPlayer(req) {
+  const auth = req.headers['authorization'] || '';
+  const token = auth.replace('Bearer ', '').trim();
+  return token ? players[token] : null;
 }
 
-async function joinRoom() {
-  const code = document.getElementById('room-input').value.trim().toUpperCase();
-  if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
-  roomId = code;
-  isHost = false;
-  await startGuest(roomId);
-}
-
-async function joinRoomAuto(code) {
-  roomId = code;
-  isHost = false;
-  await startGuest(roomId);
-}
-
-/* Mode anonyme depuis login screen */
-async function createAnon() {
-  roomId = randRoom();
-  isHost = true;
-  showScreen('lobby');
-  document.getElementById('profile-bar').style.display = 'none';
-  document.getElementById('players-panel').style.display = 'none';
-  document.getElementById('manual-panel').style.display = 'none';
-  await startHost(roomId);
-}
-
-async function joinAnon() {
-  const code = document.getElementById('room-input-anon').value.trim().toUpperCase();
-  if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
-  roomId = code;
-  isHost = false;
-  showScreen('lobby');
-  document.getElementById('profile-bar').style.display = 'none';
-  document.getElementById('players-panel').style.display = 'none';
-  document.getElementById('manual-panel').style.display = 'none';
-  await startGuest(roomId);
-}
-
-function cancelWait() {
-  document.getElementById('waiting-room').style.display = 'none';
-  if (pc) { pc.close(); pc = null; }
-}
-
-/* ═══════════════ WEBRTC ═══════════════ */
-function newPC() {
-  pc = new RTCPeerConnection({ iceServers: ICE });
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') onConnected();
-    if (['disconnected','failed','closed'].includes(pc.connectionState)) onDisconnected();
-  };
-}
-
-function waitICE(p) {
-  return new Promise(res => {
-    if (p.iceGatheringState === 'complete') { res(); return; }
-    const fn = () => { if (p.iceGatheringState === 'complete') { p.removeEventListener('icegatheringstatechange', fn); res(); } };
-    p.addEventListener('icegatheringstatechange', fn);
-    setTimeout(res, 4000);
-  });
-}
-
-async function postSDP(key, sdp) {
-  await fetch(`${SIGNAL}/${key}`, { method: 'POST', body: sdp });
-}
-
-async function getSDP(key) {
-  const r = await fetch(`${SIGNAL}/${key}`);
-  const txt = await r.text();
-  return txt || null;
-}
-
-async function startHost(room) {
-  newPC();
-  dc = pc.createDataChannel('battle');
-  setupDC(dc);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await waitICE(pc);
-  await postSDP(room + '-OFFER', btoa(JSON.stringify(pc.localDescription)));
-
-  document.getElementById('room-code-display').textContent = room;
-  document.getElementById('wait-status').textContent = 'En attente de l\'adversaire…';
-  document.getElementById('waiting-room').style.display = 'flex';
-
-  let tries = 0;
-  pollInterval && clearInterval(pollInterval);
-  const hostPoll = setInterval(async () => {
-    tries++;
-    const raw = await getSDP(room + '-ANSWER');
-    if (raw) {
-      clearInterval(hostPoll);
-      document.getElementById('wait-status').textContent = 'Connexion en cours…';
-      await pc.setRemoteDescription(JSON.parse(atob(raw)));
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(players).forEach(t => {
+    if (now - players[t].lastSeen > 40000) {
+      delete tokens[players[t].id];
+      delete players[t];
     }
-    if (tries > 60) clearInterval(hostPoll);
-  }, 2000);
-}
-
-async function startGuest(room) {
-  document.getElementById('waiting-room').style.display = 'flex';
-  document.getElementById('room-code-display').textContent = room;
-
-  let raw = null; let tries = 0;
-  while (!raw && tries < 15) {
-    document.getElementById('wait-status').textContent = `Recherche de la room ${room}… (${tries+1}/15)`;
-    raw = await getSDP(room + '-OFFER');
-    if (!raw) { await new Promise(r => setTimeout(r, 2000)); tries++; }
-  }
-  if (!raw) { alert('Room introuvable ! Vérifie le code.'); document.getElementById('waiting-room').style.display = 'none'; return; }
-
-  newPC();
-  pc.ondatachannel = e => { dc = e.channel; setupDC(dc); };
-  await pc.setRemoteDescription(JSON.parse(atob(raw)));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitICE(pc);
-  await postSDP(room + '-ANSWER', btoa(JSON.stringify(pc.localDescription)));
-  document.getElementById('wait-status').textContent = 'Réponse envoyée, connexion en cours…';
-}
-
-function setupDC(ch) {
-  ch.onopen    = () => onConnected();
-  ch.onmessage = e  => onMessage(JSON.parse(e.data));
-  ch.onerror   = e  => console.error('DC error', e);
-}
-
-function send(obj) { if (dc && dc.readyState === 'open') dc.send(JSON.stringify(obj)); }
-
-/* ═══════════════ GAME STATE ═══════════════ */
-const MAX_HP = 100;
-const gs = { myHP: MAX_HP, theirHP: MAX_HP, myTurn: false, busy: false, over: false, myAnim: null, theirAnim: null };
-
-function onConnected() {
-  if (document.getElementById('game').style.display === 'flex') return;
-  stopPolls();
-  document.getElementById('waiting-room').style.display = 'none';
-  showScreen('game');
-  gs.myTurn = isHost;
-  const myName  = myProfile ? myProfile.username : (isHost ? 'Pyros' : 'Glacius');
-  document.getElementById('my-name').textContent    = (isHost ? '⚔️ ' : '🧊 ') + myName;
-  document.getElementById('their-name').textContent = isHost ? 'Adversaire 🧊' : 'Adversaire ⚔️';
-  initThree();
-  setLog('Connexion établie — que le combat commence !', false);
-  setBusy(false);
-}
-
-function onDisconnected() {
-  if (!gs.over) setLog('⚠️ Connexion perdue avec l\'adversaire.', true);
-}
-
-function onMessage(msg) {
-  if (msg.type === 'action') applyEnemyAction(msg);
-  if (msg.type === 'chat')   addChatMsg(msg.text, false);
-  if (msg.type === 'name')   document.getElementById('their-name').textContent = (isHost ? '🧊 ' : '⚔️ ') + msg.name;
-}
-
-/* ═══════════════ COMBAT ═══════════════ */
-function doAction(name, icon, dmg, acc, heal) {
-  if (gs.busy || !gs.myTurn || gs.over) return;
-  setBusy(true);
-  const hit = Math.random() < acc;
-  const actualDmg  = hit && !heal ? dmg : 0;
-  const actualHeal = heal ? Math.min(25, MAX_HP - gs.myHP) : 0;
-
-  if (heal) {
-    gs.myHP = Math.min(MAX_HP, gs.myHP + actualHeal);
-    setLog(`Tu utilises ${icon} ${name} et récupères ${actualHeal} PV !`, false);
-  } else if (hit) {
-    gs.theirHP -= actualDmg;
-    gs.myAnim = { t: 0 };
-    setTimeout(() => spawnHitParticles('their'), 300);
-    setLog(`Tu utilises ${icon} ${name} et infliges ${actualDmg} dégâts !`, false);
-  } else {
-    setLog(`Tu utilises ${icon} ${name}… mais rates !`, false);
-  }
-
-  updateBars();
-  send({ type: 'action', name, icon, dmg: actualDmg, heal: actualHeal, hit });
-  if (checkOver()) return;
-  gs.myTurn = false;
-  setBusy(false);
-}
-
-function applyEnemyAction(msg) {
-  if (msg.heal > 0) {
-    gs.theirHP = Math.min(MAX_HP, gs.theirHP + msg.heal);
-    setLog(`L'adversaire utilise ${msg.icon} ${msg.name} et récupère ${msg.heal} PV !`, true);
-  } else if (msg.hit) {
-    gs.myHP -= msg.dmg;
-    gs.theirAnim = { t: 0 };
-    setTimeout(() => spawnHitParticles('mine'), 300);
-    setLog(`L'adversaire utilise ${msg.icon} ${msg.name} et t'inflige ${msg.dmg} dégâts !`, true);
-  } else {
-    setLog(`L'adversaire utilise ${msg.icon} ${msg.name}… mais rate !`, true);
-  }
-  updateBars();
-  if (checkOver()) return;
-  gs.myTurn = true;
-  setBusy(false);
-}
-
-function setLog(text, isEnemy) {
-  const b = document.getElementById('turn-badge');
-  b.className = 'turn-badge ' + (isEnemy ? 'theirs' : 'mine');
-  b.textContent = isEnemy ? "Tour de l'adversaire" : 'Ton tour';
-  document.getElementById('log-text').textContent = text;
-}
-
-function setBusy(b) {
-  gs.busy = b;
-  document.querySelectorAll('.action-btn').forEach(btn => btn.disabled = b || !gs.myTurn || gs.over);
-}
-
-function updateBars() {
-  const mp = Math.max(0, gs.myHP)    / MAX_HP * 100;
-  const tp = Math.max(0, gs.theirHP) / MAX_HP * 100;
-  const pBar = document.getElementById('p-bar');
-  const eBar = document.getElementById('e-bar');
-  pBar.style.width = mp + '%'; eBar.style.width = tp + '%';
-  pBar.className = 'hp-bar ' + (mp > 50 ? 'high' : mp > 25 ? 'mid' : 'low');
-  eBar.className = 'hp-bar ' + (tp > 50 ? 'high' : tp > 25 ? 'mid' : 'low');
-  document.getElementById('p-val').textContent = Math.max(0, gs.myHP)    + ' / ' + MAX_HP;
-  document.getElementById('e-val').textContent = Math.max(0, gs.theirHP) + ' / ' + MAX_HP;
-}
-
-function checkOver() {
-  if (gs.theirHP <= 0) { showOverlay('🏆 Victoire !\nTu as gagné !');           gs.over = true; setBusy(true); return true; }
-  if (gs.myHP    <= 0) { showOverlay('💀 Défaite…\nTon adversaire a gagné.'); gs.over = true; setBusy(true); return true; }
-  return false;
-}
-
-function showOverlay(text) {
-  document.getElementById('overlay').style.display = 'flex';
-  document.getElementById('overlay-text').textContent = text;
-}
-
-/* ═══════════════ CHAT ═══════════════ */
-function sendChat() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
-  if (!dc || dc.readyState !== 'open') { addChatMsg('⚠️ Pas encore connecté.', null); return; }
-  send({ type: 'chat', text });
-  addChatMsg(text, true);
-  input.value = '';
-}
-
-function addChatMsg(text, isMe) {
-  const box = document.getElementById('chat-messages');
-  const div = document.createElement('div');
-  if (isMe === null) {
-    div.className = 'chat-msg system';
-    div.textContent = text;
-  } else {
-    div.className = 'chat-msg ' + (isMe ? 'me' : 'them');
-    const who = document.createElement('span');
-    who.className = 'who';
-    who.textContent = isMe
-      ? (myProfile ? myProfile.username : (isHost ? 'Pyros' : 'Glacius'))
-      : 'Adversaire';
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    txt.textContent = text;
-    div.appendChild(who);
-    div.appendChild(txt);
-  }
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-/* ═══════════════ THREE.JS ═══════════════ */
-let r3, s3, cam3, playerMesh, enemyMesh, hitParticles = [], t3 = 0;
-
-function initThree() {
-  const canvas = document.getElementById('battle-canvas');
-  const cont   = document.getElementById('canvas-container');
-
-  r3 = new THREE.WebGLRenderer({ canvas, antialias: true });
-  r3.setPixelRatio(window.devicePixelRatio);
-  r3.shadowMap.enabled = true;
-  r3.setClearColor(0x0d0d1a, 1);
-
-  s3 = new THREE.Scene();
-  s3.fog = new THREE.Fog(0x0d0d1a, 10, 30);
-
-  cam3 = new THREE.PerspectiveCamera(55, 2, 0.1, 100);
-  cam3.position.set(0, 2.5, 7);
-  cam3.lookAt(0, 1, 0);
-
-  function resize() {
-    const w = cont.clientWidth, h = cont.clientHeight;
-    r3.setSize(w, h, false);
-    cam3.aspect = w / h;
-    cam3.updateProjectionMatrix();
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  s3.add(new THREE.AmbientLight(0x8888cc, 0.6));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-  dir.position.set(5, 8, 5); dir.castShadow = true; s3.add(dir);
-
-  const pl1 = new THREE.PointLight(0xff6600, 1.5, 8); pl1.position.set(-3,2,2); s3.add(pl1);
-  const pl2 = new THREE.PointLight(0x00aaff, 1.5, 8); pl2.position.set(3,2,2);  s3.add(pl2);
-  s3._pl1 = pl1; s3._pl2 = pl2;
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16,16,8,8), new THREE.MeshStandardMaterial({color:0x12122a,roughness:0.8}));
-  floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; s3.add(floor);
-  s3.add(new THREE.GridHelper(16,16,0x2a2a6a,0x1a1a44));
-
-  const arena = new THREE.Mesh(new THREE.CircleGeometry(3,64), new THREE.MeshStandardMaterial({color:0x1a1a3a,roughness:0.5}));
-  arena.rotation.x = -Math.PI/2; arena.position.y = 0.02; s3.add(arena);
-
-  addParticles(0xff6600); addParticles(0x00aaff);
-
-  const myCol    = isHost ? 0xff5522 : 0x22aaff;
-  const theirCol = isHost ? 0x22aaff : 0xff5522;
-
-  playerMesh = makeChar(myCol, isHost);
-  playerMesh.position.set(-2.2,0,0); playerMesh.rotation.y = 0.3; s3.add(playerMesh);
-
-  enemyMesh = makeChar(theirCol, !isHost);
-  enemyMesh.position.set(2.2,0,0); enemyMesh.rotation.y = Math.PI-0.3; s3.add(enemyMesh);
-
-  animate3();
-}
-
-function addParticles(color) {
-  const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(40*3);
-  for (let i=0;i<40;i++) { pos[i*3]=(Math.random()-0.5)*8; pos[i*3+1]=Math.random()*4; pos[i*3+2]=(Math.random()-0.5)*4-2; }
-  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-  s3.add(new THREE.Points(geo, new THREE.PointsMaterial({color,size:0.06,transparent:true,opacity:0.6})));
-}
-
-function makeChar(col, isFireType) {
-  const g = new THREE.Group();
-  const dark = isFireType ? 0xcc3300 : 0x0077cc;
-  const mat  = new THREE.MeshStandardMaterial({color:col, roughness:0.4, metalness:0.3});
-  const dmat = new THREE.MeshStandardMaterial({color:dark,roughness:0.4});
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.5),mat); body.position.y=1.15; body.castShadow=true; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32,16,16),mat); head.position.y=1.9; head.castShadow=true; g.add(head);
-
-  [[-0.18],[0.18]].forEach(([x]) => {
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.7,12),dmat);
-    l.position.set(x,0.35,0); l.castShadow=true; g.add(l);
   });
-  [[-0.48,0.4],[0.48,-0.4]].forEach(([x,rz]) => {
-    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.6,12),dmat);
-    a.position.set(x,1.15,0); a.rotation.z=rz; g.add(a);
+  Object.keys(rooms).forEach(r => {
+    if (now - rooms[r].time > 120000) delete rooms[r];
   });
+}, 10000);
 
-  if (isFireType) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8), new THREE.MeshStandardMaterial({color:0xffcc00,emissive:0xff8800,emissiveIntensity:0.5}));
-    e.position.set(0,1.2,0.28); g.add(e);
-  } else {
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.3,8), new THREE.MeshStandardMaterial({color:0x88ddff,emissive:0x0088ff,emissiveIntensity:0.4}));
-    sp.position.set(0,2.28,0); g.add(sp);
+http.createServer(async (req, res) => {
+  const parsed = url.parse(req.url, true);
+  const path   = parsed.pathname;
+
+  if (req.method === 'OPTIONS') { cors(res); res.end(); return; }
+
+  if (path === '/login') {
+    const discordUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
+    res.writeHead(302, { Location: discordUrl });
+    res.end();
+    return;
   }
 
-  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.45,16), new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.25}));
-  sh.rotation.x=-Math.PI/2; sh.position.y=0.03; g.add(sh);
-  return g;
-}
+  if (path === '/callback') {
+    const code = parsed.query.code;
+    if (!code) {
+      res.writeHead(302, { Location: FRONTEND + '/?error=no_code' });
+      res.end();
+      return;
+    }
+    try {
+      const body = new URLSearchParams({
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI
+      }).toString();
 
-function spawnHitParticles(who) {
-  const isMine = who === 'mine';
-  const bx = isMine ? -2.2 : 2.2;
-  const color = isMine ? 0xff2200 : 0x00aaff;
-  for (let i=0;i<14;i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.06+Math.random()*0.06,6,6), new THREE.MeshBasicMaterial({color}));
-    m.position.set(bx+(Math.random()-0.5)*0.5, 1.2+(Math.random()-0.5)*0.6, (Math.random()-0.5)*0.4);
-    m.userData = {vx:(Math.random()-0.5)*0.06, vy:0.04+Math.random()*0.04, vz:(Math.random()-0.5)*0.04, life:1};
-    s3.add(m); hitParticles.push(m);
+      const tokenData = await httpsPost({
+        hostname: 'discord.com',
+        path: '/api/oauth2/token',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(body)
+        }
+      }, body);
+
+      if (!tokenData.access_token) throw new Error('no token');
+
+      const userData = await httpsGet({
+        hostname: 'discord.com',
+        path: '/api/users/@me',
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+
+      const myToken = randToken();
+      const avatar = userData.avatar
+        ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+        : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || 0) % 5}.png`;
+
+      players[myToken] = {
+        id: userData.id,
+        username: userData.global_name || userData.username,
+        avatar,
+        lastSeen: Date.now(),
+        challenge: null
+      };
+      tokens[userData.id] = myToken;
+
+      res.writeHead(302, { Location: `${FRONTEND}/?token=${myToken}` });
+      res.end();
+    } catch(e) {
+      console.error('OAuth error:', e);
+      res.writeHead(302, { Location: FRONTEND + '/?error=oauth_failed' });
+      res.end();
+    }
+    return;
   }
-}
 
-function animate3() {
-  requestAnimationFrame(animate3);
-  t3 += 0.016;
-
-  if (playerMesh) playerMesh.position.y = Math.sin(t3*1.5)*0.04;
-  if (enemyMesh)  enemyMesh.position.y  = Math.sin(t3*1.5+Math.PI)*0.04;
-
-  if (gs.myAnim && playerMesh) {
-    gs.myAnim.t += 0.05;
-    playerMesh.position.x = gs.myAnim.t < 1 ? -2.2+Math.sin(gs.myAnim.t*Math.PI)*1.2 : -2.2;
-    if (gs.myAnim.t >= 1) gs.myAnim = null;
-  }
-  if (gs.theirAnim && enemyMesh) {
-    gs.theirAnim.t += 0.05;
-    enemyMesh.position.x = gs.theirAnim.t < 1 ? 2.2-Math.sin(gs.theirAnim.t*Math.PI)*1.2 : 2.2;
-    if (gs.theirAnim.t >= 1) gs.theirAnim = null;
+  if (path === '/me' && req.method === 'GET') {
+    const p = getPlayer(req);
+    if (!p) { json(res, { error: 'unauthorized' }, 401); return; }
+    p.lastSeen = Date.now();
+    json(res, { id: p.id, username: p.username, avatar: p.avatar });
+    return;
   }
 
-  hitParticles = hitParticles.filter(p => {
-    p.userData.life -= 0.04; p.userData.vy -= 0.002;
-    p.position.x += p.userData.vx; p.position.y += p.userData.vy; p.position.z += p.userData.vz;
-    p.material.opacity = p.userData.life; p.material.transparent = true;
-    if (p.userData.life <= 0) { s3.remove(p); return false; } return true;
-  });
+  if (path === '/online' && req.method === 'GET') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    me.lastSeen = Date.now();
+    const list = Object.values(players)
+      .filter(p => p.id !== me.id)
+      .map(p => ({ id: p.id, username: p.username, avatar: p.avatar, challenged: !!p.challenge }));
+    json(res, list);
+    return;
+  }
 
-  if (s3._pl1) s3._pl1.intensity = 1.3+Math.sin(t3*2.1)*0.3;
-  if (s3._pl2) s3._pl2.intensity = 1.3+Math.sin(t3*1.7+1)*0.3;
+  if (path.startsWith('/challenge/') && req.method === 'POST') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    const targetId = path.split('/')[2];
+    const targetToken = tokens[targetId];
+    if (!targetToken || !players[targetToken]) { json(res, { error: 'not_found' }, 404); return; }
+    players[targetToken].challenge = { from: me.username, fromId: me.id, avatar: me.avatar };
+    json(res, { ok: true });
+    return;
+  }
 
-  r3.render(s3, cam3);
-}
+  if (path === '/challenged' && req.method === 'GET') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    me.lastSeen = Date.now();
+    json(res, { challenge: me.challenge });
+    return;
+  }
 
-/* ═══════════════ INIT ═══════════════ */
-initAuth();
-</script>
-</body>
-</html>
+  if (path === '/accept' && req.method === 'POST') {
+    const me = getPlayer(req);
+    if (!me || !me.challenge) { json(res, { error: 'no_challenge' }, 400); return; }
+    const room = randRoom();
+    const challengerToken = tokens[me.challenge.fromId];
+    if (challengerToken && players[challengerToken]) {
+      players[challengerToken].challenge = { accepted: true, room };
+    }
+    me.challenge = null;
+    json(res, { room });
+    return;
+  }
+
+  if (path === '/decline' && req.method === 'POST') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    if (me.challenge) {
+      const challengerToken = tokens[me.challenge.fromId];
+      if (challengerToken && players[challengerToken]) {
+        players[challengerToken].challenge = { declined: true };
+      }
+    }
+    me.challenge = null;
+    json(res, { ok: true });
+    return;
+  }
+
+  const room = path.slice(1).toUpperCase();
+  if (!room) { cors(res); res.end('Battle Arena Server OK'); return; }
+
+  if (req.method === 'POST') {
+    const body = await getBody(req);
+    rooms[room] = { sdp: body, time: Date.now() };
+    cors(res); res.end('ok');
+    return;
+  }
+
+  if (req.method === 'GET') {
+    const data = rooms[room];
+    cors(res);
+    if (data) { delete rooms[room]; res.end(data.sdp); }
+    else res.end('');
+    return;
+  }
+
+  cors(res); res.writeHead(404); res.end('Not found');
+
+}).listen(process.env.PORT || 3000, () => {
+  console.log('Battle Arena Server running on port', process.env.PORT || 3000);
+});
