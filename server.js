@@ -1,29 +1,240 @@
 const http = require('http');
+const https = require('https');
+const url = require('url');
 
-const rooms = {};
+/* ═══════════════ CONFIG ═══════════════ */
+const CLIENT_ID     = '1505615169185779782';
+const CLIENT_SECRET = process.env.DISCORD_SECRET || 'vCyVrqH8neA_WyGugpWCX-e9cGjj2ajC';
+const REDIRECT_URI  = 'https://battle-arena-server-t781.onrender.com/callback';
+const FRONTEND      = process.env.FRONTEND_URL || '*';
 
-http.createServer((req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+/* ═══════════════ STOCKAGE RAM ═══════════════ */
+const rooms   = {};   // signaling WebRTC
+const players = {};   // { token: { id, username, avatar, online, challenge } }
+const tokens  = {};   // { discordId: token }
 
-  if (req.method === 'OPTIONS') { res.end(); return; }
+/* ═══════════════ HELPERS ═══════════════ */
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', FRONTEND);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
 
-  const room = req.url.slice(1).toUpperCase();
-  if (!room) { res.end('Battle Arena Signaling Server'); return; }
+function json(res, data, status = 200) {
+  cors(res);
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
 
-  if (req.method === 'POST') {
+function getBody(req) {
+  return new Promise(res => {
     let body = '';
     req.on('data', d => body += d);
-    req.on('end', () => {
-      rooms[room] = { sdp: body, time: Date.now() };
-      res.end('ok');
+    req.on('end', () => res(body));
+  });
+}
+
+function httpsGet(options) {
+  return new Promise((res, rej) => {
+    const req = https.request(options, r => {
+      let data = '';
+      r.on('data', d => data += d);
+      r.on('end', () => res(JSON.parse(data)));
     });
+    req.on('error', rej);
+    req.end();
+  });
+}
+
+function httpsPost(options, body) {
+  return new Promise((res, rej) => {
+    const req = https.request(options, r => {
+      let data = '';
+      r.on('data', d => data += d);
+      r.on('end', () => res(JSON.parse(data)));
+    });
+    req.on('error', rej);
+    req.write(body);
+    req.end();
+  });
+}
+
+function randToken() {
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+function getPlayer(req) {
+  const auth = req.headers['authorization'] || '';
+  const token = auth.replace('Bearer ', '');
+  return players[token] || null;
+}
+
+/* ═══════════════ NETTOYAGE ═══════════════ */
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(players).forEach(t => {
+    if (now - players[t].lastSeen > 30000) {
+      delete tokens[players[t].id];
+      delete players[t];
+    }
+  });
+  Object.keys(rooms).forEach(r => {
+    if (now - rooms[r].time > 120000) delete rooms[r];
+  });
+}, 10000);
+
+/* ═══════════════ SERVEUR ═══════════════ */
+http.createServer(async (req, res) => {
+  const parsed = url.parse(req.url, true);
+  const path   = parsed.pathname;
+
+  if (req.method === 'OPTIONS') { cors(res); res.end(); return; }
+
+  /* ── OAuth Discord ── */
+
+  // 1. Redirige vers Discord
+  if (path === '/login') {
+    const discordUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
+    res.writeHead(302, { Location: discordUrl });
+    res.end();
+    return;
+  }
+
+  // 2. Callback Discord → échange le code contre un token
+  if (path === '/callback') {
+    const code = parsed.query.code;
+    if (!code) { res.writeHead(302, { Location: '/?error=no_code' }); res.end(); return; }
+
+    try {
+      const body = new URLSearchParams({
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI
+      }).toString();
+
+      const tokenData = await httpsPost({
+        hostname: 'discord.com',
+        path: '/api/oauth2/token',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+      }, body);
+
+      const userData = await httpsGet({
+        hostname: 'discord.com',
+        path: '/api/users/@me',
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+
+      const myToken = randToken();
+      players[myToken] = {
+        id: userData.id,
+        username: userData.username,
+        avatar: userData.avatar
+          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
+          : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.id) % 5}.png`,
+        online: true,
+        lastSeen: Date.now(),
+        challenge: null
+      };
+      tokens[userData.id] = myToken;
+
+      res.writeHead(302, { Location: `/?token=${myToken}` });
+      res.end();
+    } catch (e) {
+      res.writeHead(302, { Location: '/?error=oauth_failed' });
+      res.end();
+    }
+    return;
+  }
+
+  /* ── API joueur ── */
+
+  // Infos du joueur connecté
+  if (path === '/me' && req.method === 'GET') {
+    const p = getPlayer(req);
+    if (!p) { json(res, { error: 'unauthorized' }, 401); return; }
+    p.lastSeen = Date.now();
+    json(res, { id: p.id, username: p.username, avatar: p.avatar });
+    return;
+  }
+
+  // Liste des joueurs en ligne
+  if (path === '/online' && req.method === 'GET') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    me.lastSeen = Date.now();
+    const list = Object.values(players)
+      .filter(p => p.id !== me.id)
+      .map(p => ({ id: p.id, username: p.username, avatar: p.avatar, challenge: p.challenge }));
+    json(res, list);
+    return;
+  }
+
+  // Défier un joueur
+  if (path.startsWith('/challenge/') && req.method === 'POST') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    const targetId = path.split('/')[2];
+    const targetToken = tokens[targetId];
+    if (!targetToken || !players[targetToken]) { json(res, { error: 'not_found' }, 404); return; }
+    players[targetToken].challenge = { from: me.username, fromId: me.id, room: null };
+    json(res, { ok: true });
+    return;
+  }
+
+  // Vérifier si on est défié
+  if (path === '/challenged' && req.method === 'GET') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    me.lastSeen = Date.now();
+    json(res, { challenge: me.challenge });
+    return;
+  }
+
+  // Accepter un défi → crée la room
+  if (path === '/accept' && req.method === 'POST') {
+    const me = getPlayer(req);
+    if (!me || !me.challenge) { json(res, { error: 'no_challenge' }, 400); return; }
+    const roomCode = randToken().slice(0, 4).toUpperCase();
+    const challengerToken = tokens[me.challenge.fromId];
+    if (challengerToken && players[challengerToken]) {
+      players[challengerToken].challenge = { accepted: true, room: roomCode };
+    }
+    me.challenge = null;
+    json(res, { room: roomCode });
+    return;
+  }
+
+  // Refuser un défi
+  if (path === '/decline' && req.method === 'POST') {
+    const me = getPlayer(req);
+    if (!me) { json(res, { error: 'unauthorized' }, 401); return; }
+    me.challenge = null;
+    json(res, { ok: true });
+    return;
+  }
+
+  /* ── Signaling WebRTC ── */
+  const room = path.slice(1).toUpperCase();
+  if (!room) { cors(res); res.end('Battle Arena Server'); return; }
+
+  if (req.method === 'POST') {
+    const body = await getBody(req);
+    rooms[room] = { sdp: body, time: Date.now() };
+    cors(res); res.end('ok');
+    return;
   }
 
   if (req.method === 'GET') {
     const data = rooms[room];
+    cors(res);
     if (data) { delete rooms[room]; res.end(data.sdp); }
     else res.end('');
+    return;
   }
-}).listen(process.env.PORT || 3000);
+
+  cors(res); res.writeHead(404); res.end('Not found');
+
+}).listen(process.env.PORT || 3000, () => console.log('Battle Arena Server running'));
