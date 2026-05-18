@@ -7,30 +7,42 @@ let t3 = 0;
 
 /* ── HP Sprites ── */
 function makeHPCanvas(name, hp, maxHP, color) {
-  const W = 256, H = 80;
+  const W = 384, H = 105;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
 
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(10,10,26,0.75)';
-  roundRect(ctx, 4, 4, W-8, H-8, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(8,8,20,0.82)';
+  roundRect(ctx, 3, 3, W-6, H-6, 14); ctx.fill();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  roundRect(ctx, 14, 44, W-28, 18, 6); ctx.fill();
-
-  const pct = Math.max(0, hp) / maxHP;
-  ctx.fillStyle = pct > 0.5 ? '#1D9E75' : pct > 0.25 ? '#EF9F27' : '#E24B4A';
-  roundRect(ctx, 14, 44, Math.max(0, (W-28) * pct), 18, 6); ctx.fill();
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = 2;
+  roundRect(ctx, 3, 3, W-6, H-6, 14); ctx.stroke();
 
   ctx.fillStyle = color;
-  ctx.font = 'bold 18px sans-serif';
+  ctx.font = 'bold 28px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(name, W/2, 34);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.fillText(name, W/2, 38);
+  ctx.shadowBlur = 0;
 
-  ctx.fillStyle = 'rgba(230,230,255,0.9)';
-  ctx.font = '13px sans-serif';
-  ctx.fillText(`${Math.max(0,hp)} / ${maxHP}`, W/2, 76);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  roundRect(ctx, 16, 54, W-32, 24, 7); ctx.fill();
+
+  const pct = Math.max(0, hp) / maxHP;
+  const barColor = pct > 0.5 ? '#1D9E75' : pct > 0.25 ? '#EF9F27' : '#E24B4A';
+  ctx.fillStyle = barColor;
+  ctx.shadowColor = barColor;
+  ctx.shadowBlur = 6;
+  roundRect(ctx, 16, 54, Math.max(0, (W-32) * pct), 24, 7); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = 'rgba(230,230,255,0.95)';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${Math.max(0, hp)} / ${maxHP}`, W/2, 94);
 
   return c;
 }
@@ -53,13 +65,16 @@ function makeHPSprite(name, hp, maxHP, color) {
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(1.8, 0.56, 1);
+  sprite.scale.set(2.8, 0.98, 1);
   sprite._name = name; sprite._maxHP = maxHP; sprite._color = color;
+  sprite._lastHP = hp; // cache pour éviter les redraws inutiles
   return sprite;
 }
 
 function updateHPSprite(sprite, hp) {
   if (!sprite) return;
+  if (sprite._lastHP === hp) return; // pas changé → on ne redessine pas
+  sprite._lastHP = hp;
   const canvas = makeHPCanvas(sprite._name, hp, sprite._maxHP, sprite._color);
   sprite.material.map.image = canvas;
   sprite.material.map.needsUpdate = true;
@@ -143,11 +158,11 @@ function buildChars() {
   const theirLabel = theirPseudo || theirChar.name;
 
   playerHPSprite = makeHPSprite(myLabel, gs.myHP, gs.myMaxHP, myChar.colorHex);
-  playerHPSprite.position.set(-2.2, 3.0, 0);
+  playerHPSprite.position.set(-2.2, 3.4, 0);
   s3.add(playerHPSprite);
 
   enemyHPSprite = makeHPSprite(theirLabel, gs.theirHP, gs.theirMaxHP, theirChar.colorHex);
-  enemyHPSprite.position.set(2.2, 3.0, 0);
+  enemyHPSprite.position.set(2.2, 3.4, 0);
   s3.add(enemyHPSprite);
 }
 
