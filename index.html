@@ -2,59 +2,44 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Battle Arena — Multijoueur P2P</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Battle Arena</title>
   <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
 <div id="app">
   <h1>⚔️ Battle Arena</h1>
 
-  <!-- ══ LOGIN ══ -->
+  <!-- LOGIN -->
   <div id="login-screen">
-    <div class="login-title">Connexion requise</div>
-    <div class="login-sub">Connecte-toi avec Discord pour voir tes amis en ligne et les défier !</div>
+    <div class="login-title">Connexion</div>
+    <div class="login-sub">Connecte-toi avec Discord pour voir tes amis, ou joue directement avec un code.</div>
     <button class="btn discord" onclick="login()">
       <svg width="20" height="20" viewBox="0 0 71 55" fill="white" style="vertical-align:middle;margin-right:8px">
         <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4a40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.4 0A39.5 39.5 0 0 0 25.5.4 58.4 58.4 0 0 0 10.8 5C1.6 18.8-1 32.2.3 45.4a58.9 58.9 0 0 0 18 9.1 42.2 42.2 0 0 0 3.6-5.9 38.4 38.4 0 0 1-6.1-2.9l1.5-1.1a41.9 41.9 0 0 0 36.2 0l1.5 1.1a38.2 38.2 0 0 1-6.1 2.9 42 42 0 0 0 3.6 5.9 58.7 58.7 0 0 0 18-9.1C72 30 68.1 16.7 60.1 4.9ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Z"/>
       </svg>
       Se connecter avec Discord
     </button>
-    <div style="font-size:12px;color:var(--muted)">ou jouer sans compte</div>
+    <div style="font-size:12px;color:var(--muted)">ou sans compte</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
       <input id="room-input-anon" type="text" maxlength="4" placeholder="Code room"
-        style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:Orbitron,sans-serif;font-size:18px;letter-spacing:0.2em;color:var(--text);outline:none;text-transform:uppercase;text-align:center;width:140px"
+        style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:Orbitron,sans-serif;font-size:18px;letter-spacing:.2em;color:var(--text);outline:none;text-transform:uppercase;text-align:center;width:140px"
         oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
       <button class="btn ice"     onclick="joinAnon()">🔗 Rejoindre</button>
       <button class="btn primary" onclick="createAnon()">⚔️ Créer</button>
     </div>
   </div>
 
-  <!-- ══ LOBBY ══ -->
+  <!-- LOBBY SCREEN -->
   <div id="lobby-screen">
 
     <div id="profile-bar">
-      <img class="profile-avatar" id="profile-avatar" src="" alt="avatar"/>
+      <img class="profile-avatar" id="profile-avatar" src="" alt=""/>
       <div>
         <div class="profile-name" id="profile-name">...</div>
         <div class="profile-status">🟢 En ligne</div>
       </div>
       <button class="btn small danger profile-logout" onclick="logout()">Déconnexion</button>
-    </div>
-
-    <!-- Choix du mode -->
-    <div id="mode-bar">
-      <span class="mode-label">Mode :</span>
-      <button class="mode-pill active" data-mode="1v1" onclick="setLobbyMode('1v1',this)">⚔️ 1v1</button>
-      <button class="mode-pill"        data-mode="ffa" onclick="setLobbyMode('ffa',this)">💥 Free For All</button>
-      <button class="mode-pill"        data-mode="2v2" onclick="setLobbyMode('2v2',this)">🛡️ 2v2</button>
-      <div id="opts-2v2">
-        PV :
-        <select onchange="teamHPMode=this.value">
-          <option value="individual">Individuels</option>
-          <option value="shared">Partagés</option>
-        </select>
-      </div>
     </div>
 
     <div id="challenge-notif">
@@ -75,7 +60,7 @@
         <span id="online-count">0 joueur</span>
       </div>
       <div id="players-list"></div>
-      <div id="players-empty">Aucun autre joueur en ligne pour l'instant…</div>
+      <div id="players-empty">Aucun joueur en ligne…</div>
     </div>
 
     <div id="manual-panel">
@@ -89,55 +74,50 @@
     </div>
 
     <div id="waiting-room">
-      <div style="font-size:13px;color:var(--muted)">Code de la partie</div>
+      <div style="font-size:13px;color:var(--muted)">Code de la salle</div>
       <div class="room-badge" id="room-code-display">????</div>
-      <div class="waiting"><span class="dot"></span><span id="wait-status">En attente…</span></div>
+      <div class="waiting"><span class="dot"></span><span id="wait-status">Connexion…</span></div>
       <button class="btn small danger" onclick="cancelWait()">Annuler</button>
     </div>
 
   </div>
 
-  <!-- ══ GAME ══ -->
+  <!-- GAME -->
   <div id="game">
 
-    <!-- Sélection du mode (si hôte) -->
-    <div id="mode-select">
-      <div id="mode-select-title">🎮 Choisis le mode de jeu</div>
-      <div id="mode-cards">
-        <div class="mode-card" data-mode="1v1" onclick="selectGameMode('1v1',this)">
-          <div class="mode-card-icon">⚔️</div>
-          <div class="mode-card-name">1 vs 1</div>
-          <div class="mode-card-desc">Combat classique</div>
-        </div>
-        <div class="mode-card" data-mode="ffa" onclick="selectGameMode('ffa',this)">
-          <div class="mode-card-icon">💥</div>
-          <div class="mode-card-name">Free For All</div>
-          <div class="mode-card-desc">Jusqu'à 4 joueurs</div>
-        </div>
-        <div class="mode-card" data-mode="2v2" onclick="selectGameMode('2v2',this)">
-          <div class="mode-card-icon">🛡️</div>
-          <div class="mode-card-name">2 vs 2</div>
-          <div class="mode-card-desc">Par équipes</div>
+    <!-- Lobby in-game -->
+    <div id="game-lobby">
+      <div id="game-lobby-title">
+        <span>🏟️ Salle <span id="lobby-room-code"></span></span>
+        <span id="lobby-count">1 joueur</span>
+      </div>
+
+      <div id="lobby-player-list"></div>
+
+      <!-- Mode (hôte seulement) -->
+      <div id="lobby-mode-section">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Mode de jeu</div>
+        <div id="lobby-modes"></div>
+        <div id="lobby-2v2-opts">
+          PV :
+          <select onchange="G.teamHPMode=this.value">
+            <option value="individual">Individuels</option>
+            <option value="shared">Partagés par équipe</option>
+          </select>
         </div>
       </div>
-      <div id="opts-2v2-game">
-        <label>Points de vie en 2v2 :</label>
-        <select onchange="teamHPMode=this.value">
-          <option value="individual">Individuels (chacun ses PV)</option>
-          <option value="shared">Partagés (une barre par équipe)</option>
-        </select>
-      </div>
-      <button class="btn primary" onclick="confirmMode()">✅ Confirmer</button>
+
+      <button id="ready-btn" class="btn primary" onclick="setReady()">✅ Je suis prêt !</button>
     </div>
 
-    <!-- Sélection de personnage -->
+    <!-- Char select -->
     <div id="char-select">
       <div id="char-select-title">⚔️ Choisis ton personnage</div>
       <div id="char-select-status"></div>
       <div id="char-cards"></div>
     </div>
 
-    <!-- Zone de combat -->
+    <!-- Battle area -->
     <div id="battle-area">
 
       <div id="battle-row">
@@ -154,14 +134,14 @@
         <div id="chat-panel">
           <div id="chat-header">
             <span>💬 Chat</span>
-            <button id="chat-close" onclick="toggleChat()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;display:none;">✕</button>
+            <button id="chat-close" onclick="toggleChat()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;display:none">✕</button>
           </div>
           <div id="chat-messages">
-            <div class="chat-msg system">Connexion établie !</div>
+            <div class="chat-msg system">Que le combat commence !</div>
           </div>
           <div id="chat-input-row">
             <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
-              onkeydown="if(event.key==='Enter') sendChat()"/>
+              onkeydown="if(event.key==='Enter')sendChat()"/>
             <button id="chat-send" onclick="sendChat()">➤</button>
           </div>
         </div>
@@ -176,61 +156,31 @@
         <div id="actions-grid" class="actions"></div>
         <div id="target-picker"></div>
         <div id="waiting-action" style="display:none;text-align:center;padding:14px;font-size:13px;color:var(--muted)">
-          <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente des autres joueurs…
+          <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente des autres…
         </div>
       </div>
 
-    </div><!-- end battle-area -->
-  </div><!-- end game -->
+    </div>
+  </div>
 
-  <footer>WebRTC P2P · Discord OAuth · Render · HTML / JS / CSS</footer>
+  <footer>WebRTC P2P · Discord OAuth · Render · HTML/JS/CSS</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/network.js"></script>
+<script src="js/net.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/lobby.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/combat.js"></script>
 <script>
-  /* ── Helpers lobby mode ── */
-  function setLobbyMode(mode, btn) {
-    currentMode = mode;
-    numPlayers  = MODES[mode].maxPlayers;
-    document.querySelectorAll('.mode-pill').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('opts-2v2').style.display = mode === '2v2' ? 'flex' : 'none';
-  }
-
-  function selectGameMode(mode, card) {
-    currentMode = mode;
-    document.querySelectorAll('.mode-card').forEach(c => c.style.borderColor = 'var(--border)');
-    card.style.borderColor = 'var(--fire)';
-    document.getElementById('opts-2v2-game').style.display = mode === '2v2' ? 'flex' : 'none';
-  }
-
-  /* ── Surcharge onAllConnected pour montrer mode-select si hôte ── */
-  function onAllConnected() {
-    if (document.getElementById('game').style.display === 'flex') return;
-    stopPolls();
-    document.getElementById('waiting-room').style.display = 'none';
-    showScreen('game');
-    if (isHost) {
-      document.getElementById('mode-select').style.display = 'flex';
-    } else {
-      // L'invité attend le room_info de l'hôte puis va direct char select
-      document.getElementById('char-select').style.display = 'flex';
-      document.getElementById('char-select-status').textContent = 'En attente du mode choisi par l\'hôte…';
-    }
-  }
-
-  /* ── confirmMode broadcast et passe à char select ── */
-  function confirmMode() {
-    numPlayers = MODES[currentMode].maxPlayers;
-    document.getElementById('mode-select').style.display = 'none';
-    broadcast({ type: 'room_info', mode: currentMode, teamHPMode, numPlayers });
-    showCharSelect();
+  /* Affiche le code dans le lobby in-game */
+  const _origShowRoomWait = showRoomWait;
+  function showRoomWait() {
+    _origShowRoomWait();
+    const el = document.getElementById('lobby-room-code');
+    if (el) el.textContent = G.roomId;
   }
 
   initAuth();

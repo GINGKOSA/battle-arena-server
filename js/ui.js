@@ -1,166 +1,89 @@
+'use strict';
 /* ═══════════════ UI ═══════════════ */
 
 /* ── Screens ── */
 function showScreen(name) {
-  document.getElementById('login-screen').style.display  = name === 'login'  ? 'flex' : 'none';
-  document.getElementById('lobby-screen').style.display  = name === 'lobby'  ? 'flex' : 'none';
-  document.getElementById('game').style.display          = name === 'game'   ? 'flex' : 'none';
-}
-
-/* ── Mode select ── */
-function showModeSelect() {
-  document.getElementById('mode-select').style.display = 'flex';
-  document.getElementById('char-select').style.display = 'none';
-  document.getElementById('battle-area').style.display = 'none';
-}
-
-function selectMode(mode) {
-  currentMode = mode;
-  numPlayers  = MODES[mode].maxPlayers;
-
-  document.querySelectorAll('.mode-card').forEach(c => {
-    c.style.borderColor = c.dataset.mode === mode ? 'var(--fire)' : 'var(--border)';
-  });
-
-  // Options 2v2
-  const opts2v2 = document.getElementById('opts-2v2');
-  if (opts2v2) opts2v2.style.display = mode === '2v2' ? 'flex' : 'none';
-}
-
-function confirmMode() {
-  document.getElementById('mode-select').style.display = 'none';
-  // Si hôte, broadcast le mode
-  if (isHost) {
-    broadcast({ type: 'room_info', mode: currentMode, teamHPMode, numPlayers });
-  }
-  showCharSelect();
-}
-
-/* ── Char select ── */
-function showCharSelect() {
-  gs.charChoices = {};
-  document.getElementById('char-select').style.display  = 'flex';
-  document.getElementById('battle-area').style.display  = 'none';
-  document.getElementById('char-select-status').textContent = 'Choisis ton personnage !';
-
-  const cards = document.getElementById('char-cards');
-  cards.innerHTML = '';
-
-  Object.values(CHARS).forEach(c => {
-    const card = document.createElement('div');
-    card.className = 'char-card';
-    card.dataset.char = c.name;
-    card.innerHTML = `
-      <div class="char-card-icon">${c.icon}</div>
-      <div class="char-card-name">${c.name}</div>
-      <div class="char-card-stats">
-        PV : ${c.maxHP}<br>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-          <span style="width:52px;font-size:10px">Vitesse</span>
-          <div class="char-card-stat-bar" style="flex:1">
-            <div class="char-card-stat-fill" style="width:${c.speed}%;background:${c.colorHex}"></div>
-          </div>
-        </div>
-        <div style="margin-top:6px">${c.moves.filter(m=>!m.heal).map(m=>`${m.icon} ${m.name} — ${m.desc}`).join('<br>')}</div>
-      </div>
-    `;
-    card.onclick = () => selectChar(c.name);
-    cards.appendChild(card);
+  ['login-screen','lobby-screen','game'].forEach(id => {
+    const el=document.getElementById(id);
+    if (!el) return;
+    el.style.display = id.replace('-screen','')===name||id===name ? (id==='game'?'flex':'flex') : 'none';
   });
 }
 
-/* ── Joueurs en ligne ── */
-function renderPlayers(list) {
-  const container = document.getElementById('players-list');
-  const empty     = document.getElementById('players-empty');
-  const count     = document.getElementById('online-count');
-  count.textContent = list.length + (list.length <= 1 ? ' joueur' : ' joueurs');
-  if (list.length === 0) { container.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  container.innerHTML = '';
-  list.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    row.innerHTML = `
-      <img class="player-avatar" src="${p.avatar}" alt="${p.username}" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
+/* ── Online players ── */
+function renderOnlinePlayers(list) {
+  const el=document.getElementById('players-list');
+  const empty=document.getElementById('players-empty');
+  document.getElementById('online-count').textContent=`${list.length} joueur${list.length!==1?'s':''}`;
+  if (!list.length) { el.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  el.innerHTML='';
+  list.forEach(p=>{
+    const row=document.createElement('div');
+    row.className='player-row';
+    row.innerHTML=`
+      <img class="player-avatar" src="${p.avatar}" alt="" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
       <div class="player-name">${p.username}</div>
-      <button class="btn small primary" onclick="challengePlayer('${p.id}')" ${p.challenged?'disabled':''}>
-        ${p.challenged ? '⏳ Occupé' : '⚔️ Défier'}
-      </button>
-    `;
-    container.appendChild(row);
+      <button class="btn small primary" onclick="challengePlayer('${p.id}')" ${p.busy?'disabled':''}>
+        ${p.busy?'⏳':'⚔️ Défier'}
+      </button>`;
+    el.appendChild(row);
   });
 }
 
-/* ── Notif défi ── */
-function showChallengeNotif(challenge) {
-  document.getElementById('notif-avatar').src = challenge.avatar || '';
-  document.getElementById('notif-name').textContent = challenge.from;
-  document.getElementById('challenge-notif').style.display = 'flex';
-}
-
-function hideChallengeNotif() {
-  if (!pendingChallenge) return;
-  pendingChallenge = null;
-  document.getElementById('challenge-notif').style.display = 'none';
-}
-
-/* ── Chat burger (mobile) ── */
+/* ── Chat burger ── */
 function toggleChat() {
-  const panel    = document.getElementById('chat-panel');
-  const closeBtn = document.getElementById('chat-close');
-  const isOpen   = panel.classList.toggle('open');
-  if (closeBtn) closeBtn.style.display = isOpen ? 'block' : 'none';
-  if (isOpen) setTimeout(() => {
-    const msgs = document.getElementById('chat-messages');
-    if (msgs) msgs.scrollTop = msgs.scrollHeight;
-  }, 50);
+  const panel=document.getElementById('chat-panel');
+  const close=document.getElementById('chat-close');
+  const open=panel.classList.toggle('open');
+  if (close) close.style.display=open?'block':'none';
+  if (open) setTimeout(()=>{ const m=document.getElementById('chat-messages'); if(m) m.scrollTop=m.scrollHeight; },50);
 }
 
-document.addEventListener('click', e => {
-  if (window.innerWidth > 600) return;
-  const panel  = document.getElementById('chat-panel');
-  const burger = document.getElementById('chat-burger');
-  if (!panel || !burger) return;
-  if (panel.classList.contains('open') && !panel.contains(e.target) && !burger.contains(e.target)) {
+document.addEventListener('click', e=>{
+  if (window.innerWidth>600) return;
+  const panel=document.getElementById('chat-panel');
+  const burger=document.getElementById('chat-burger');
+  if (!panel||!burger) return;
+  if (panel.classList.contains('open')&&!panel.contains(e.target)&&!burger.contains(e.target)) {
     panel.classList.remove('open');
-    const cb = document.getElementById('chat-close');
-    if (cb) cb.style.display = 'none';
+    const c=document.getElementById('chat-close'); if(c) c.style.display='none';
   }
 });
 
 /* ── Chat ── */
 function sendChat() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
-  const anyOpen = Object.values(dcs).some(dc => dc.readyState === 'open');
-  if (!anyOpen) { addChatMsg('⚠️ Pas encore connecté.', null); return; }
-  send({ type: 'chat', text, slot: mySlot });
-  addChatMsg(text, true, mySlot);
-  input.value = '';
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim(); if(!text) return;
+  const anyOpen=Object.values(dcs).some(dc=>dc.readyState==='open');
+  if (!anyOpen) { addChatMsg('⚠️ Non connecté.',null,null); return; }
+  send({type:'chat',text,slot:G.mySlot});
+  addChatMsg(text,true,G.mySlot);
+  input.value='';
 }
 
 function addChatMsg(text, isMe, slot) {
-  const box = document.getElementById('chat-messages');
-  const div = document.createElement('div');
-  if (isMe === null) {
-    div.className = 'chat-msg system';
-    div.textContent = text;
+  const box=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  if (isMe===null) {
+    div.className='chat-msg system'; div.textContent=text;
   } else {
-    div.className = 'chat-msg ' + (isMe ? 'me' : 'them');
-    const who = document.createElement('span');
-    who.className = 'who';
-    who.style.color = SLOT_COLORS[slot ?? 0] || 'var(--fire)';
-    who.textContent = isMe
-      ? (myPseudo || 'Moi')
-      : (gs.pseudos?.[slot] || `Joueur ${(slot||0)+1}`);
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    txt.textContent = text;
-    div.appendChild(who);
-    div.appendChild(txt);
+    div.className='chat-msg '+(isMe?'me':'them');
+    const who=document.createElement('span'); who.className='who';
+    who.style.color=SLOT_CLR[slot??0]||'var(--fire)';
+    who.textContent = isMe ? (G.myPseudo||'Moi') : (G.players.find(p=>p.slot===slot)?.pseudo||G.lobbyPlayers.find(p=>p.slot===slot)?.pseudo||`J${(slot||0)+1}`);
+    const txt=document.createElement('span'); txt.className='txt'; txt.textContent=text;
+    div.appendChild(who); div.appendChild(txt);
   }
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
+  box.appendChild(div); box.scrollTop=box.scrollHeight;
+}
+
+/* ── Combat log ── */
+function addLog(text, type='system') {
+  const box=document.getElementById('combat-log-messages'); if(!box) return;
+  const e=document.createElement('div'); e.className='log-entry '+type;
+  const b=document.createElement('span'); b.className='log-badge';
+  b.textContent=type==='me'?'Toi':type==='them'?'Ennemi':'•';
+  const t=document.createElement('span'); t.className='log-text'; t.textContent=text;
+  e.appendChild(b); e.appendChild(t); box.appendChild(e); box.scrollTop=box.scrollHeight;
 }

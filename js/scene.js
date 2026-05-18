@@ -1,297 +1,195 @@
-/* ═══════════════ THREE.JS SCENE ═══════════════ */
-let r3 = null, s3, cam3;
-let meshes    = {};   // { slot: THREE.Group }
-let hpSprites = {};   // { slot: THREE.Sprite }
-let hitParticles = [];
-let t3 = 0;
+'use strict';
+/* ═══════════════ THREE.JS ═══════════════ */
+let r3=null, s3, cam3;
+let meshes={}, hpSprites={}, hitParticles=[], t3=0;
+let _animQueue=[];
 
-/* ── HP Sprites ── */
+/* ── HP Canvas (mis en cache) ── */
 function makeHPCanvas(name, hp, maxHP, color) {
-  const W = 384, H = 105;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
+  const W=384, H=100, c=document.createElement('canvas');
+  c.width=W; c.height=H;
+  const ctx=c.getContext('2d');
 
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(8,8,20,0.82)';
-  roundRect(ctx, 3, 3, W-6, H-6, 14); ctx.fill();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='rgba(8,8,20,0.82)';
+  rrect(ctx,3,3,W-6,H-6,12); ctx.fill();
+  ctx.strokeStyle=color+'55'; ctx.lineWidth=2;
+  rrect(ctx,3,3,W-6,H-6,12); ctx.stroke();
 
-  ctx.strokeStyle = color + '55';
-  ctx.lineWidth = 2;
-  roundRect(ctx, 3, 3, W-6, H-6, 14); ctx.stroke();
+  ctx.fillStyle=color; ctx.font='bold 26px sans-serif'; ctx.textAlign='center';
+  ctx.shadowColor=color; ctx.shadowBlur=7;
+  ctx.fillText(name.slice(0,14),W/2,34); ctx.shadowBlur=0;
 
-  ctx.fillStyle = color;
-  ctx.font = 'bold 28px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = color; ctx.shadowBlur = 8;
-  ctx.fillText(name.slice(0, 14), W/2, 38);
-  ctx.shadowBlur = 0;
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  rrect(ctx,14,50,W-28,22,6); ctx.fill();
+  const pct=Math.max(0,hp)/maxHP;
+  const bc=pct>.5?'#1D9E75':pct>.25?'#EF9F27':'#E24B4A';
+  ctx.fillStyle=bc; ctx.shadowColor=bc; ctx.shadowBlur=5;
+  rrect(ctx,14,50,Math.max(0,(W-28)*pct),22,6); ctx.fill(); ctx.shadowBlur=0;
 
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  roundRect(ctx, 16, 54, W-32, 24, 7); ctx.fill();
-
-  const pct = Math.max(0, hp) / maxHP;
-  const barColor = pct > 0.5 ? '#1D9E75' : pct > 0.25 ? '#EF9F27' : '#E24B4A';
-  ctx.fillStyle = barColor; ctx.shadowColor = barColor; ctx.shadowBlur = 6;
-  roundRect(ctx, 16, 54, Math.max(0, (W-32) * pct), 24, 7); ctx.fill();
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = 'rgba(230,230,255,0.95)';
-  ctx.font = 'bold 20px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(`${Math.max(0, hp)} / ${maxHP}`, W/2, 94);
-
+  ctx.fillStyle='rgba(230,230,255,.95)'; ctx.font='bold 19px sans-serif';
+  ctx.fillText(`${Math.max(0,hp)} / ${maxHP}`,W/2,90);
   return c;
 }
 
-function roundRect(ctx, x, y, w, h, r) {
+const rrect = (ctx,x,y,w,h,r) => {
   ctx.beginPath();
-  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+};
+
+function makeSprite(name,hp,maxHP,color) {
+  const tex=new THREE.CanvasTexture(makeHPCanvas(name,hp,maxHP,color));
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  sp.scale.set(2.5,.87,1);
+  sp._n=name; sp._max=maxHP; sp._c=color; sp._hp=hp;
+  return sp;
 }
 
-function makeHPSprite(name, hp, maxHP, color) {
-  const canvas = makeHPCanvas(name, hp, maxHP, color);
-  const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.6, 0.9, 1);
-  sprite._name = name; sprite._maxHP = maxHP; sprite._color = color; sprite._lastHP = hp;
-  return sprite;
-}
-
-function updateHPSprite(sprite, hp, name) {
-  if (!sprite) return;
-  if (sprite._lastHP === hp && (!name || sprite._name === name)) return;
-  sprite._lastHP = hp;
-  if (name) sprite._name = name;
-  sprite.material.map.image = makeHPCanvas(sprite._name, hp, sprite._maxHP, sprite._color);
-  sprite.material.map.needsUpdate = true;
+function updateSprite(sp, hp, name) {
+  if (!sp) return;
+  const n=name||sp._n;
+  if (sp._hp===hp && sp._n===n) return;
+  sp._hp=hp; sp._n=n;
+  sp.material.map.image=makeHPCanvas(n,hp,sp._max,sp._c);
+  sp.material.map.needsUpdate=true;
 }
 
 function updateAllSprites() {
-  players.forEach(p => {
-    const sprite = hpSprites[p.slot];
-    if (sprite) updateHPSprite(sprite, p.hp, p.pseudo);
+  G.players.forEach(p=>{
+    const sp=hpSprites[p.slot];
+    if (sp) updateSprite(sp,p.hp,p.pseudo);
   });
 }
 
-/* ── Init scène ── */
+/* ── Init ── */
 function initThree() {
-  const canvas = document.getElementById('battle-canvas');
-  const cont   = document.getElementById('canvas-container');
+  const canvas=document.getElementById('battle-canvas');
+  const cont=document.getElementById('canvas-container');
 
-  r3 = new THREE.WebGLRenderer({ canvas, antialias: true });
-  r3.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  r3.shadowMap.enabled = true;
-  r3.setClearColor(0x0d0d1a, 1);
+  r3=new THREE.WebGLRenderer({canvas,antialias:true});
+  r3.setPixelRatio(Math.min(devicePixelRatio,2));
+  r3.shadowMap.enabled=true; r3.shadowMap.type=THREE.PCFSoftShadowMap;
+  r3.setClearColor(0x0d0d1a,1);
 
-  s3 = new THREE.Scene();
-  s3.fog = new THREE.Fog(0x0d0d1a, 12, 32);
+  s3=new THREE.Scene(); s3.fog=new THREE.Fog(0x0d0d1a,12,32);
+  cam3=new THREE.PerspectiveCamera(55,2,.1,100);
+  cam3.position.set(0,2.8,8); cam3.lookAt(0,1,0);
 
-  cam3 = new THREE.PerspectiveCamera(55, 2, 0.1, 100);
-  cam3.position.set(0, 2.8, 8);
-  cam3.lookAt(0, 1, 0);
+  const onResize=()=>{ const w=cont.clientWidth,h=cont.clientHeight; r3.setSize(w,h,false); cam3.aspect=w/h; cam3.updateProjectionMatrix(); };
+  onResize(); window.addEventListener('resize',onResize);
 
-  function resize() {
-    const w = cont.clientWidth, h = cont.clientHeight;
-    r3.setSize(w, h, false);
-    cam3.aspect = w / h;
-    cam3.updateProjectionMatrix();
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Lumières
-  s3.add(new THREE.AmbientLight(0x8888cc, 0.6));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-  dir.position.set(5, 8, 5); dir.castShadow = true; s3.add(dir);
-  const pl1 = new THREE.PointLight(0xff6600, 1.5, 10); pl1.position.set(-4,2,2); s3.add(pl1);
-  const pl2 = new THREE.PointLight(0x00aaff, 1.5, 10); pl2.position.set(4,2,2);  s3.add(pl2);
-  s3._pl1 = pl1; s3._pl2 = pl2;
+  s3.add(new THREE.AmbientLight(0x8888cc,.6));
+  const dl=new THREE.DirectionalLight(0xffffff,1.2); dl.position.set(5,8,5); dl.castShadow=true; s3.add(dl);
+  const pl1=new THREE.PointLight(0xff6600,1.4,10); pl1.position.set(-4,2,2); s3.add(pl1);
+  const pl2=new THREE.PointLight(0x00aaff,1.4,10); pl2.position.set(4,2,2);  s3.add(pl2);
+  s3._pl1=pl1; s3._pl2=pl2;
 
   // Sol
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(20,20,10,10),
-    new THREE.MeshStandardMaterial({ color:0x12122a, roughness:0.8 })
-  );
-  floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; s3.add(floor);
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(20,20,8,8),new THREE.MeshStandardMaterial({color:0x12122a,roughness:.8}));
+  fl.rotation.x=-Math.PI/2; fl.receiveShadow=true; s3.add(fl);
   s3.add(new THREE.GridHelper(20,20,0x2a2a6a,0x1a1a44));
+  const arena=new THREE.Mesh(new THREE.CircleGeometry(4,64),new THREE.MeshStandardMaterial({color:0x1a1a3a,roughness:.5}));
+  arena.rotation.x=-Math.PI/2; arena.position.y=.02; s3.add(arena);
 
-  const arena = new THREE.Mesh(
-    new THREE.CircleGeometry(4,64),
-    new THREE.MeshStandardMaterial({ color:0x1a1a3a, roughness:0.5 })
-  );
-  arena.rotation.x = -Math.PI/2; arena.position.y = 0.02; s3.add(arena);
-
-  addParticleField(0xff6600);
-  addParticleField(0x00aaff);
-
+  addPFX(0xff6600); addPFX(0x00aaff);
   buildChars();
   animate3();
 }
 
+function addPFX(color) {
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(50*3);
+  for(let i=0;i<50;i++){pos[i*3]=(Math.random()-.5)*14;pos[i*3+1]=Math.random()*5;pos[i*3+2]=(Math.random()-.5)*7-3;}
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  s3.add(new THREE.Points(geo,new THREE.PointsMaterial({color,size:.06,transparent:true,opacity:.5})));
+}
+
 function buildChars() {
-  // Supprime les anciens
-  Object.values(meshes).forEach(m => s3.remove(m));
-  Object.values(hpSprites).forEach(s => s3.remove(s));
-  meshes = {}; hpSprites = {};
+  Object.values(meshes).forEach(m=>s3.remove(m));
+  Object.values(hpSprites).forEach(sp=>s3.remove(sp));
+  meshes={}; hpSprites={};
 
-  const positions = POSITIONS[players.length] || POSITIONS[2];
+  const n=G.players.length;
+  const pos=POS[n]||POS[2];
 
-  players.forEach((p, i) => {
-    const pos   = positions[i] || [0, 0, 0];
-    const color = SLOT_COLORS_3D[p.slot] || 0xffffff;
-    const colorHex = SLOT_COLORS[p.slot] || '#ffffff';
+  G.players.forEach((p,i)=>{
+    const [x,,z]=pos[i]||[0,0,0];
+    const col=SLOT_CLR_3D[p.slot]||0xffffff;
+    const mesh=makeChar(col,p.char.name==='Pyros');
+    mesh.position.set(x,0,z||0);
+    mesh.rotation.y=i<Math.ceil(n/2)?0.4:Math.PI-.4;
+    mesh._bx=x;
+    s3.add(mesh); meshes[p.slot]=mesh;
 
-    // Personnage
-    const mesh = makeChar(color, p.char.name === 'Pyros');
-    mesh.position.set(pos[0], pos[1], pos[2]);
-    // Rotation : slots 0,1 regardent à droite, 2,3 regardent à gauche
-    mesh.rotation.y = i < Math.ceil(players.length/2) ? 0.3 : Math.PI - 0.3;
-    s3.add(mesh);
-    meshes[p.slot] = mesh;
-    mesh._baseX = pos[0];
-
-    // Sprite HP
-    const label  = p.pseudo || p.char.name;
-    const sprite = makeHPSprite(label, p.hp, p.maxHP, colorHex);
-    sprite.position.set(pos[0], 3.4, pos[2]);
-    s3.add(sprite);
-    hpSprites[p.slot] = sprite;
+    const sp=makeSprite(p.pseudo,p.hp,p.maxHP,SLOT_CLR[p.slot]||'#fff');
+    sp.position.set(x,3.3,z||0); s3.add(sp); hpSprites[p.slot]=sp;
   });
 }
 
-function resetThreeChars() {
-  buildChars();
-}
+function resetThreeChars() { buildChars(); }
 
-function addParticleField(color) {
-  const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(50*3);
-  for (let i=0;i<50;i++) {
-    pos[i*3]   = (Math.random()-0.5)*12;
-    pos[i*3+1] = Math.random()*5;
-    pos[i*3+2] = (Math.random()-0.5)*6-3;
-  }
-  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-  s3.add(new THREE.Points(geo, new THREE.PointsMaterial({color,size:0.06,transparent:true,opacity:0.5})));
-}
+function makeChar(col,fire) {
+  const g=new THREE.Group();
+  const dk=fire?0xcc3300:0x0077cc;
+  const m=new THREE.MeshStandardMaterial({color:col,roughness:.4,metalness:.3});
+  const dm=new THREE.MeshStandardMaterial({color:dk,roughness:.4});
 
-function makeChar(col, isFireType) {
-  const g    = new THREE.Group();
-  const dark = isFireType ? 0xcc3300 : 0x0077cc;
-  const mat  = new THREE.MeshStandardMaterial({color:col, roughness:0.4, metalness:0.3});
-  const dmat = new THREE.MeshStandardMaterial({color:dark, roughness:0.4});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.7,.9,.5),m); body.position.y=1.15; body.castShadow=true; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.32,16,16),m); head.position.y=1.9; head.castShadow=true; g.add(head);
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.5), mat);
-  body.position.y=1.15; body.castShadow=true; g.add(body);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32,16,16), mat);
-  head.position.y=1.9; head.castShadow=true; g.add(head);
-
-  [[-0.18],[0.18]].forEach(([x]) => {
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.7,12), dmat);
-    l.position.set(x,0.35,0); l.castShadow=true; g.add(l);
+  [-.18,.18].forEach(x=>{
+    const l=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.7,12),dm);
+    l.position.set(x,.35,0); l.castShadow=true; g.add(l);
   });
-  [[-0.48,0.4],[0.48,-0.4]].forEach(([x,rz]) => {
-    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.6,12), dmat);
+  [[-.48,.4],[.48,-.4]].forEach(([x,rz])=>{
+    const a=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,.6,12),dm);
     a.position.set(x,1.15,0); a.rotation.z=rz; g.add(a);
   });
 
-  if (isFireType) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),
-      new THREE.MeshStandardMaterial({color:0xffcc00,emissive:0xff8800,emissiveIntensity:0.5}));
-    e.position.set(0,1.2,0.28); g.add(e);
-  } else {
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.3,8),
-      new THREE.MeshStandardMaterial({color:0x88ddff,emissive:0x0088ff,emissiveIntensity:0.4}));
-    sp.position.set(0,2.28,0); g.add(sp);
-  }
+  const emb=fire
+    ? new THREE.Mesh(new THREE.SphereGeometry(.12,8,8),new THREE.MeshStandardMaterial({color:0xffcc00,emissive:0xff8800,emissiveIntensity:.5}))
+    : new THREE.Mesh(new THREE.ConeGeometry(.1,.3,8),new THREE.MeshStandardMaterial({color:0x88ddff,emissive:0x0088ff,emissiveIntensity:.4}));
+  emb.position.set(0,fire?1.2:2.28,fire?.28:0); g.add(emb);
 
-  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.45,16),
-    new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.25}));
-  sh.rotation.x=-Math.PI/2; sh.position.y=0.03; g.add(sh);
+  const sh=new THREE.Mesh(new THREE.CircleGeometry(.45,16),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.25}));
+  sh.rotation.x=-Math.PI/2; sh.position.y=.03; g.add(sh);
   return g;
 }
 
 function spawnHitParticles(slot) {
-  const mesh = meshes[slot];
-  if (!mesh) return;
-  const bx = mesh.position.x;
-  const color = SLOT_COLORS_3D[slot] || 0xff2200;
-  for (let i=0;i<12;i++) {
-    const m = new THREE.Mesh(
-      new THREE.SphereGeometry(0.06+Math.random()*0.06, 6, 6),
-      new THREE.MeshBasicMaterial({color})
-    );
-    m.position.set(bx+(Math.random()-0.5)*0.5, 1.2+(Math.random()-0.5)*0.6, (Math.random()-0.5)*0.4);
-    m.userData = {vx:(Math.random()-0.5)*0.06, vy:0.04+Math.random()*0.04, vz:(Math.random()-0.5)*0.04, life:1};
+  const mesh=meshes[slot]; if(!mesh) return;
+  const color=SLOT_CLR_3D[slot]||0xff2200;
+  for(let i=0;i<12;i++){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.06+Math.random()*.06,6,6),new THREE.MeshBasicMaterial({color}));
+    m.position.set(mesh.position.x+(Math.random()-.5)*.5,1.2+(Math.random()-.5)*.6,(Math.random()-.5)*.4);
+    m.userData={vx:(Math.random()-.5)*.06,vy:.04+Math.random()*.04,vz:(Math.random()-.5)*.04,life:1};
     s3.add(m); hitParticles.push(m);
   }
 }
 
-/* ── Boucle d'animation ── */
+/* ── Boucle ── */
 function animate3() {
   requestAnimationFrame(animate3);
-  t3 += 0.016;
+  t3+=.016;
 
-  // Flottement de tous les personnages
-  Object.entries(meshes).forEach(([slot, mesh]) => {
-    const offset = parseInt(slot) * 0.8;
-    mesh.position.y = Math.sin(t3*1.5 + offset)*0.04;
-
-    // Suivi sprite HP
-    const sprite = hpSprites[slot];
-    if (sprite) {
-      sprite.position.x = mesh.position.x;
-      sprite.position.y = 3.4 + mesh.position.y;
-    }
+  Object.entries(meshes).forEach(([s,m])=>{
+    m.position.y=Math.sin(t3*1.5+(+s)*.8)*.04;
+    const sp=hpSprites[s];
+    if(sp){ sp.position.x=m.position.x; sp.position.y=3.3+m.position.y; }
   });
 
-  // Animation d'attaque (joueur principal)
-  if (gs.myAnim) {
-    const mesh = meshes[mySlot];
-    if (mesh) {
-      gs.myAnim.t += 0.05;
-      const baseX = mesh._baseX || 0;
-      mesh.position.x = gs.myAnim.t < 1 ? baseX + Math.sin(gs.myAnim.t*Math.PI)*0.8 : baseX;
-      if (gs.myAnim.t >= 1) gs.myAnim = null;
-    }
-  }
-
-  if (gs.theirAnim) {
-    const slot = gs.theirAnim.slot;
-    const mesh = meshes[slot];
-    if (mesh) {
-      gs.theirAnim.t += 0.05;
-      const baseX = mesh._baseX || 0;
-      mesh.position.x = gs.theirAnim.t < 1 ? baseX - Math.sin(gs.theirAnim.t*Math.PI)*0.8 : baseX;
-      if (gs.theirAnim.t >= 1) gs.theirAnim = null;
-    }
-  }
-
-  // Particules
-  hitParticles = hitParticles.filter(p => {
-    p.userData.life -= 0.04; p.userData.vy -= 0.002;
-    p.position.x += p.userData.vx;
-    p.position.y += p.userData.vy;
-    p.position.z += p.userData.vz;
-    p.material.opacity = p.userData.life;
-    p.material.transparent = true;
-    if (p.userData.life <= 0) { s3.remove(p); return false; }
-    return true;
+  hitParticles=hitParticles.filter(p=>{
+    p.userData.life-=.04; p.userData.vy-=.002;
+    p.position.x+=p.userData.vx; p.position.y+=p.userData.vy; p.position.z+=p.userData.vz;
+    p.material.opacity=p.userData.life; p.material.transparent=true;
+    if(p.userData.life<=0){s3.remove(p);return false;} return true;
   });
 
-  if (s3._pl1) s3._pl1.intensity = 1.3+Math.sin(t3*2.1)*0.3;
-  if (s3._pl2) s3._pl2.intensity = 1.3+Math.sin(t3*1.7+1)*0.3;
+  if(s3._pl1) s3._pl1.intensity=1.3+Math.sin(t3*2.1)*.3;
+  if(s3._pl2) s3._pl2.intensity=1.3+Math.sin(t3*1.7+1)*.3;
 
-  r3.render(s3, cam3);
+  r3.render(s3,cam3);
 }
