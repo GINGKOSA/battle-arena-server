@@ -22,12 +22,11 @@ function onMessage(msg) {
 function onPeerUp(slot) {
   updateWaitUI();
   // Si hôte et c'est le 1er guest → ouvre le lobby
+ // Update room code display
+  const el = document.getElementById('lobby-room-code');
+  if (el) el.textContent = G.roomId;
   const connected = Object.values(dcs).filter(dc=>dc.readyState==='open').length;
   if (G.isHost && connected===1 && G.phase==='lobby') {
-    clearInterval(G._hostPoll);
-    document.getElementById('waiting-room').style.display='none';
-    showScreen('game');
-    G.phase='lobby';
     renderLobby();
   } else if (!G.isHost && connected===1 && G.phase==='lobby') {
     document.getElementById('waiting-room').style.display='none';
@@ -252,7 +251,7 @@ async function applyOne(atk, tgt, move, hit) {
   }
 }
 
-const delay = ms => new Promise(r=>setTimeout(r,ms));
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* ── Fin de partie ── */
 function isOver() {

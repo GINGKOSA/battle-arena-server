@@ -117,7 +117,7 @@ const startGuest = async () => {
 /* ── Callbacks connexion ── */
 let _connectedSlots = new Set();
 
-const onPeerUp = slot => {
+function onPeerUp(slot) {
   _connectedSlots.add(slot);
   updateWaitUI();
 };
@@ -188,7 +188,6 @@ function cancelWait() {
 }
 
 const setWaitStatus = t => { const el=document.getElementById('wait-status'); if(el) el.textContent=t; };
-const delay = ms => new Promise(r=>setTimeout(r,ms));
 
 /* ── Challenge via Discord ── */
 let _pendingChallenge = null;

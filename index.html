@@ -175,14 +175,6 @@
 <script src="js/scene.js"></script>
 <script src="js/combat.js"></script>
 <script>
-  /* Affiche le code dans le lobby in-game */
-  const _origShowRoomWait = showRoomWait;
-  function showRoomWait() {
-    _origShowRoomWait();
-    const el = document.getElementById('lobby-room-code');
-    if (el) el.textContent = G.roomId;
-  }
-
   initAuth();
 </script>
 </body>
