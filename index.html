@@ -460,11 +460,11 @@
       <span id="log-text">Connexion établie — que le combat commence !</span>
     </div>
 
-    <div class="actions" id="action-panel">
-      <button class="action-btn" onclick="doAction('Flamme','🔥',20,0.9)">🔥 Flamme <span class="dmg">20 dmg · 90%</span></button>
-      <button class="action-btn" onclick="doAction('Inferno','💥',40,0.6)">💥 Inferno <span class="dmg">40 dmg · 60%</span></button>
-      <button class="action-btn" onclick="doAction('Brûlure','🌋',15,1.0)">🌋 Brûlure <span class="dmg">15 dmg · 100%</span></button>
-      <button class="action-btn" onclick="doAction('Soin','💚',0,1,true)">💚 Soin <span class="dmg">+25 PV</span></button>
+    <div id="action-panel">
+      <div id="actions-grid" class="actions"></div>
+      <div id="waiting-action" style="display:none;text-align:center;padding:14px;font-size:13px;color:var(--muted)">
+        <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente du choix de l'adversaire…
+      </div>
     </div>
 
     <div id="chat-panel">
@@ -584,15 +584,13 @@ async function pollChallenge() {
   try {
     const data = await api('/challenged');
     if (data.challenge) {
-     if (data.challenge.accepted && data.challenge.room) {
-      clearInterval(challengePollInterval);
-      document.getElementById('challenge-notif').style.display = 'none';
-      // Celui qui a défié devient l'HÔTE
-      roomId = data.challenge.room;
-      isHost = true;
-      await startHost(roomId);
-      return;
-    }
+      if (data.challenge.accepted && data.challenge.room) {
+        // Notre défi a été accepté → rejoindre la room
+        clearInterval(challengePollInterval);
+        document.getElementById('challenge-notif').style.display = 'none';
+        joinRoomAuto(data.challenge.room);
+        return;
+      }
       if (data.challenge.declined) return;
       if (!pendingChallenge || pendingChallenge.fromId !== data.challenge.fromId) {
         pendingChallenge = data.challenge;
@@ -660,9 +658,7 @@ async function acceptChallenge() {
     document.getElementById('challenge-notif').style.display = 'none';
     pendingChallenge = null;
     // On est l'invité → rejoindre la room créée par le serveur
-    roomId = data.room;
-    isHost = false;
-    await startGuest(roomId);
+    joinRoomAuto(data.room);
   } catch { alert('Erreur lors de l\'acceptation.'); }
 }
 
@@ -812,22 +808,81 @@ function setupDC(ch) {
 
 function send(obj) { if (dc && dc.readyState === 'open') dc.send(JSON.stringify(obj)); }
 
+/* ═══════════════ PERSONNAGES ═══════════════ */
+const CHARS = {
+  Pyros: {
+    name: 'Pyros', icon: '⚔️', color: 0xff5522,
+    maxHP: 90, speed: 80,
+    moves: [
+      { name: 'Flamme',   icon: '🔥', dmg: 18, acc: 0.95, desc: '18 dmg · 95%' },
+      { name: 'Inferno',  icon: '💥', dmg: 38, acc: 0.60, desc: '38 dmg · 60%' },
+      { name: 'Brûlure',  icon: '🌋', dmg: 12, acc: 1.00, desc: '12 dmg · 100%' },
+      { name: 'Soin',     icon: '💚', dmg: 0,  acc: 1.00, heal: 20, desc: '+20 PV' },
+    ]
+  },
+  Glacius: {
+    name: 'Glacius', icon: '🧊', color: 0x22aaff,
+    maxHP: 110, speed: 40,
+    moves: [
+      { name: 'Blizzard',   icon: '❄️', dmg: 22, acc: 0.90, desc: '22 dmg · 90%' },
+      { name: 'Avalanche',  icon: '🌀', dmg: 45, acc: 0.55, desc: '45 dmg · 55%' },
+      { name: 'Stalactite', icon: '🧊', dmg: 14, acc: 1.00, desc: '14 dmg · 100%' },
+      { name: 'Soin',       icon: '💚', dmg: 0,  acc: 1.00, heal: 25, desc: '+25 PV' },
+    ]
+  }
+};
+
 /* ═══════════════ GAME STATE ═══════════════ */
-const MAX_HP = 100;
-const gs = { myHP: MAX_HP, theirHP: MAX_HP, myTurn: false, busy: false, over: false, myAnim: null, theirAnim: null };
+let myChar = null;
+let theirChar = null;
+const gs = {
+  myHP: 0, theirHP: 0,
+  myMaxHP: 0, theirMaxHP: 0,
+  myChoice: null, theirChoice: null,
+  busy: false, over: false,
+  myAnim: null, theirAnim: null
+};
 
 function onConnected() {
   if (document.getElementById('game').style.display === 'flex') return;
   stopPolls();
   document.getElementById('waiting-room').style.display = 'none';
   showScreen('game');
-  gs.myTurn = isHost;
-  const myName  = myProfile ? myProfile.username : (isHost ? 'Pyros' : 'Glacius');
-  document.getElementById('my-name').textContent    = (isHost ? '⚔️ ' : '🧊 ') + myName;
-  document.getElementById('their-name').textContent = isHost ? 'Adversaire 🧊' : 'Adversaire ⚔️';
+
+  // Hôte = Pyros (rapide), Invité = Glacius (lent)
+  myChar    = isHost ? CHARS.Pyros   : CHARS.Glacius;
+  theirChar = isHost ? CHARS.Glacius : CHARS.Pyros;
+
+  gs.myHP      = myChar.maxHP;
+  gs.theirHP   = theirChar.maxHP;
+  gs.myMaxHP   = myChar.maxHP;
+  gs.theirMaxHP= theirChar.maxHP;
+  gs.myChoice  = null;
+  gs.theirChoice = null;
+  gs.busy = false;
+  gs.over = false;
+
+  const myName = myProfile ? myProfile.username : myChar.name;
+  document.getElementById('my-name').textContent    = myChar.icon + ' ' + myName;
+  document.getElementById('their-name').textContent = theirChar.icon + ' Adversaire';
+  document.getElementById('p-val').textContent = gs.myHP + ' / ' + gs.myMaxHP;
+  document.getElementById('e-val').textContent = gs.theirHP + ' / ' + gs.theirMaxHP;
+
+  renderMoves();
   initThree();
-  setLog('Connexion établie — que le combat commence !', false);
-  setBusy(false);
+  setLog('Choisis ton attaque !', false);
+}
+
+function renderMoves() {
+  const grid = document.getElementById('actions-grid');
+  grid.innerHTML = '';
+  myChar.moves.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.innerHTML = `${m.icon} ${m.name} <span class="dmg">${m.desc}</span>`;
+    btn.onclick = () => chooseAction(m);
+    grid.appendChild(btn);
+  });
 }
 
 function onDisconnected() {
@@ -835,83 +890,146 @@ function onDisconnected() {
 }
 
 function onMessage(msg) {
-  if (msg.type === 'action') applyEnemyAction(msg);
+  if (msg.type === 'choice') receiveTheirChoice(msg.move);
   if (msg.type === 'chat')   addChatMsg(msg.text, false);
-  if (msg.type === 'name')   document.getElementById('their-name').textContent = (isHost ? '🧊 ' : '⚔️ ') + msg.name;
+  if (msg.type === 'name')   document.getElementById('their-name').textContent = theirChar.icon + ' ' + msg.name;
 }
 
-/* ═══════════════ COMBAT ═══════════════ */
-function doAction(name, icon, dmg, acc, heal) {
-  if (gs.busy || !gs.myTurn || gs.over) return;
-  setBusy(true);
-  const hit = Math.random() < acc;
-  const actualDmg  = hit && !heal ? dmg : 0;
-  const actualHeal = heal ? Math.min(25, MAX_HP - gs.myHP) : 0;
+/* ═══════════════ NOUVEAU SYSTÈME DE COMBAT ═══════════════ */
+function chooseAction(move) {
+  if (gs.myChoice || gs.busy || gs.over) return;
+  gs.myChoice = move;
 
-  if (heal) {
-    gs.myHP = Math.min(MAX_HP, gs.myHP + actualHeal);
-    setLog(`Tu utilises ${icon} ${name} et récupères ${actualHeal} PV !`, false);
+  // Désactive les boutons, affiche attente
+  document.querySelectorAll('.action-btn').forEach(b => b.disabled = true);
+  document.getElementById('waiting-action').style.display = 'block';
+  setLog(`Tu choisis ${move.icon} ${move.name} — en attente de l'adversaire…`, false);
+
+  // Envoie le choix
+  send({ type: 'choice', move });
+
+  // Si l'adversaire avait déjà choisi, on résout
+  if (gs.theirChoice) resolveRound();
+}
+
+function receiveTheirChoice(move) {
+  gs.theirChoice = move;
+  if (gs.myChoice) resolveRound();
+  else setLog(`L'adversaire a choisi — à toi !`, true);
+}
+
+async function resolveRound() {
+  if (gs.busy || gs.over) return;
+  gs.busy = true;
+  document.getElementById('waiting-action').style.display = 'none';
+
+  const myMove    = gs.myChoice;
+  const theirMove = gs.theirChoice;
+  gs.myChoice = null;
+  gs.theirChoice = null;
+
+  const mySpeed    = myChar.speed;
+  const theirSpeed = theirChar.speed;
+
+  // Détermine l'ordre
+  const iGoFirst = mySpeed >= theirSpeed;
+
+  if (iGoFirst) {
+    // Phase 1 : moi j'attaque
+    await applyMove(myMove, 'me', theirMove);
+    if (gs.over) return;
+    await delay(600);
+    // Phase 2 : eux ripostent
+    await applyMove(theirMove, 'them', myMove);
+  } else {
+    // Phase 1 : eux attaquent
+    await applyMove(theirMove, 'them', myMove);
+    if (gs.over) return;
+    await delay(600);
+    // Phase 2 : moi je riposte
+    await applyMove(myMove, 'me', theirMove);
+  }
+
+  if (!gs.over) {
+    gs.busy = false;
+    renderMoves();
+    document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
+    setLog('Choisis ton attaque !', false);
+  }
+}
+
+async function applyMove(move, who, opponentMove) {
+  const isMe = who === 'me';
+  const hit = Math.random() < move.acc;
+
+  if (move.heal) {
+    if (isMe) {
+      gs.myHP = Math.min(gs.myMaxHP, gs.myHP + move.heal);
+      setLog(`Tu utilises ${move.icon} ${move.name} et récupères ${move.heal} PV !`, false);
+    } else {
+      gs.theirHP = Math.min(gs.theirMaxHP, gs.theirHP + move.heal);
+      setLog(`L'adversaire utilise ${move.icon} ${move.name} et récupère ${move.heal} PV !`, true);
+    }
   } else if (hit) {
-    gs.theirHP -= actualDmg;
-    gs.myAnim = { t: 0 };
-    setTimeout(() => spawnHitParticles('their'), 300);
-    setLog(`Tu utilises ${icon} ${name} et infliges ${actualDmg} dégâts !`, false);
+    const dmg = move.dmg;
+    if (isMe) {
+      gs.theirHP -= dmg;
+      gs.myAnim = { t: 0 };
+      setTimeout(() => spawnHitParticles('their'), 300);
+      setLog(`Tu utilises ${move.icon} ${move.name} et infliges ${dmg} dégâts !`, false);
+    } else {
+      gs.myHP -= dmg;
+      gs.theirAnim = { t: 0 };
+      setTimeout(() => spawnHitParticles('mine'), 300);
+      setLog(`L'adversaire utilise ${move.icon} ${move.name} et t'inflige ${dmg} dégâts !`, true);
+    }
   } else {
-    setLog(`Tu utilises ${icon} ${name}… mais rates !`, false);
+    const name = isMe ? 'Tu utilises' : "L'adversaire utilise";
+    const rate = isMe ? 'rates' : 'rate';
+    setLog(`${name} ${move.icon} ${move.name}… mais ${rate} !`, !isMe);
   }
 
   updateBars();
-  send({ type: 'action', name, icon, dmg: actualDmg, heal: actualHeal, hit });
-  if (checkOver()) return;
-  gs.myTurn = false;
-  setBusy(false);
+  await delay(400);
+  checkOver();
 }
 
-function applyEnemyAction(msg) {
-  if (msg.heal > 0) {
-    gs.theirHP = Math.min(MAX_HP, gs.theirHP + msg.heal);
-    setLog(`L'adversaire utilise ${msg.icon} ${msg.name} et récupère ${msg.heal} PV !`, true);
-  } else if (msg.hit) {
-    gs.myHP -= msg.dmg;
-    gs.theirAnim = { t: 0 };
-    setTimeout(() => spawnHitParticles('mine'), 300);
-    setLog(`L'adversaire utilise ${msg.icon} ${msg.name} et t'inflige ${msg.dmg} dégâts !`, true);
-  } else {
-    setLog(`L'adversaire utilise ${msg.icon} ${msg.name}… mais rate !`, true);
-  }
-  updateBars();
-  if (checkOver()) return;
-  gs.myTurn = true;
-  setBusy(false);
-}
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function setLog(text, isEnemy) {
   const b = document.getElementById('turn-badge');
   b.className = 'turn-badge ' + (isEnemy ? 'theirs' : 'mine');
-  b.textContent = isEnemy ? "Tour de l'adversaire" : 'Ton tour';
+  b.textContent = isEnemy ? "Adversaire" : 'Toi';
   document.getElementById('log-text').textContent = text;
 }
 
 function setBusy(b) {
   gs.busy = b;
-  document.querySelectorAll('.action-btn').forEach(btn => btn.disabled = b || !gs.myTurn || gs.over);
+  document.querySelectorAll('.action-btn').forEach(btn => btn.disabled = b || gs.over);
 }
 
 function updateBars() {
-  const mp = Math.max(0, gs.myHP)    / MAX_HP * 100;
-  const tp = Math.max(0, gs.theirHP) / MAX_HP * 100;
+  const mp = Math.max(0, gs.myHP)    / gs.myMaxHP    * 100;
+  const tp = Math.max(0, gs.theirHP) / gs.theirMaxHP * 100;
   const pBar = document.getElementById('p-bar');
   const eBar = document.getElementById('e-bar');
   pBar.style.width = mp + '%'; eBar.style.width = tp + '%';
   pBar.className = 'hp-bar ' + (mp > 50 ? 'high' : mp > 25 ? 'mid' : 'low');
   eBar.className = 'hp-bar ' + (tp > 50 ? 'high' : tp > 25 ? 'mid' : 'low');
-  document.getElementById('p-val').textContent = Math.max(0, gs.myHP)    + ' / ' + MAX_HP;
-  document.getElementById('e-val').textContent = Math.max(0, gs.theirHP) + ' / ' + MAX_HP;
+  document.getElementById('p-val').textContent = Math.max(0, gs.myHP)    + ' / ' + gs.myMaxHP;
+  document.getElementById('e-val').textContent = Math.max(0, gs.theirHP) + ' / ' + gs.theirMaxHP;
 }
 
 function checkOver() {
-  if (gs.theirHP <= 0) { showOverlay('🏆 Victoire !\nTu as gagné !');           gs.over = true; setBusy(true); return true; }
-  if (gs.myHP    <= 0) { showOverlay('💀 Défaite…\nTon adversaire a gagné.'); gs.over = true; setBusy(true); return true; }
+  if (gs.theirHP <= 0 && gs.myHP <= 0) {
+    showOverlay('🤝 Match nul !'); gs.over = true; setBusy(true); return true;
+  }
+  if (gs.theirHP <= 0) {
+    showOverlay('🏆 Victoire !\nTu as gagné !'); gs.over = true; setBusy(true); return true;
+  }
+  if (gs.myHP <= 0) {
+    showOverlay('💀 Défaite…\nTon adversaire a gagné.'); gs.over = true; setBusy(true); return true;
+  }
   return false;
 }
 
