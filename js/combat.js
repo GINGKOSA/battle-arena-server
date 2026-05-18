@@ -21,8 +21,6 @@ function onMessage(msg) {
 /* ── Peer events ── */
 function onPeerUp(slot) {
   updateWaitUI();
-  // Si hôte et c'est le 1er guest → ouvre le lobby
- // Update room code display
   const el = document.getElementById('lobby-room-code');
   if (el) el.textContent = G.roomId;
   const connected = Object.values(dcs).filter(dc=>dc.readyState==='open').length;

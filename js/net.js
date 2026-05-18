@@ -138,7 +138,8 @@ const randRoom = () => Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math
 async function createRoom() {
   const p = ensurePseudo(); if (!p) return;
   G.myPseudo = p; G.isHost = true; G.mySlot = 0; G.roomId = randRoom();
-  G.lobbyPlayers = [{slot:0,pseudo:p,avatar:G.myProfile?.avatar||null,ready:false}];
+  G.lobbyPlayers = [{slot:0,pseudo:p,avatar:null,ready:false}];
+  showScreen('lobby');   // ← ajouter cette ligne
   showRoomWait();
   await startHost();
 }
@@ -148,6 +149,7 @@ async function joinRoom() {
   const code = document.getElementById('room-input').value.trim().toUpperCase();
   if (code.length!==4) { alert('Code de 4 lettres requis !'); return; }
   G.myPseudo = p; G.isHost = false; G.roomId = code;
+  showScreen('lobby');   // ← ajouter cette ligne
   showRoomWait();
   await startGuest();
 }
@@ -156,6 +158,7 @@ async function createAnon() {
   const p = ensurePseudo(); if (!p) return;
   G.myPseudo = p; G.isHost = true; G.mySlot = 0; G.roomId = randRoom();
   G.lobbyPlayers = [{slot:0,pseudo:p,avatar:null,ready:false}];
+  showScreen('lobby');   // ← ajouter cette ligne
   showRoomWait();
   await startHost();
 }

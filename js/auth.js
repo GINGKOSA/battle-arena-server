@@ -24,7 +24,12 @@ async function initAuth() {
     document.getElementById('profile-name').textContent = me.username;
     showScreen('lobby');
     startPolls();
-  } catch { showScreen('login'); }
+  } catch(e) { 
+  console.warn('Auth error:', e);
+  G.myToken = null;
+  localStorage.removeItem('ba_token');
+  showScreen('login'); 
+}
 }
 
 function login()  { location.href = SIGNAL+'/login'; }
