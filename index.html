@@ -4,350 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Battle Arena — Multijoueur P2P</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&family=Orbitron:wght@500;700&display=swap');
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --fire: #ff5522;
-      --ice: #22aaff;
-      --bg: #0d0d1a;
-      --panel: #13132a;
-      --panel2: #1a1a35;
-      --border: #2a2a4a;
-      --text: #e8e8ff;
-      --muted: #7777aa;
-      --hp-high: #1D9E75;
-      --hp-mid: #EF9F27;
-      --hp-low: #E24B4A;
-      --discord: #5865F2;
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-
-    h1 {
-      font-family: 'Orbitron', sans-serif;
-      font-size: clamp(13px, 2.5vw, 18px);
-      letter-spacing: 0.15em;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 14px;
-      text-align: center;
-    }
-
-    #app { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 12px; }
-
-    .btn {
-      padding: 10px 22px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--panel2);
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s;
-    }
-    .btn:hover { background: #22224a; border-color: var(--fire); }
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.4; cursor: default; transform: none; }
-    .btn.primary { background: var(--fire); border-color: var(--fire); color: #fff; }
-    .btn.primary:hover { background: #ff6633; }
-    .btn.ice { background: var(--ice); border-color: var(--ice); color: #fff; }
-    .btn.discord { background: var(--discord); border-color: var(--discord); color: #fff; font-size: 15px; padding: 12px 28px; }
-    .btn.discord:hover { background: #4752c4; border-color: #4752c4; }
-    .btn.small { padding: 6px 14px; font-size: 12px; }
-    .btn.danger { background: rgba(226,75,74,0.15); border-color: var(--hp-low); color: var(--hp-low); }
-    .btn.danger:hover { background: rgba(226,75,74,0.25); }
-
-    /* ── LOGIN ── */
-    #login-screen {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 40px 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      text-align: center;
-    }
-
-    .login-title { font-family: 'Orbitron', sans-serif; font-size: 20px; color: var(--text); }
-    .login-sub { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 400px; }
-
-    /* ── LOBBY ── */
-    #lobby-screen { display: none; flex-direction: column; gap: 12px; }
-
-    /* Profil */
-    #profile-bar {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .profile-avatar {
-      width: 38px; height: 38px;
-      border-radius: 50%;
-      border: 2px solid var(--discord);
-      object-fit: cover;
-      flex-shrink: 0;
-    }
-
-    .profile-name { font-weight: 600; font-size: 14px; color: var(--text); }
-    .profile-status { font-size: 11px; color: var(--hp-high); }
-    .profile-logout { margin-left: auto; }
-
-    /* Joueurs en ligne */
-    #players-panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-    }
-
-    #players-header {
-      padding: 12px 18px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    #players-title {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 12px;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      text-transform: uppercase;
-    }
-
-    #online-count {
-      font-size: 11px;
-      color: var(--muted);
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      border-radius: 99px;
-      padding: 2px 10px;
-    }
-
-    #players-list { display: flex; flex-direction: column; }
-
-    .player-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 18px;
-      border-bottom: 1px solid var(--border);
-      transition: background 0.15s;
-    }
-    .player-row:last-child { border-bottom: none; }
-    .player-row:hover { background: var(--panel2); }
-
-    .player-avatar {
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-      border: 1px solid var(--border);
-    }
-
-    .player-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; }
-
-    #players-empty {
-      padding: 24px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--muted);
-      font-style: italic;
-    }
-
-    /* Room manuelle */
-    #manual-panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .manual-title {
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    .room-row { display: flex; gap: 8px; align-items: center; }
-
-    #room-input {
-      flex: 1;
-      background: #0a0a18;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 18px;
-      letter-spacing: 0.2em;
-      color: var(--text);
-      outline: none;
-      text-transform: uppercase;
-      text-align: center;
-    }
-    #room-input:focus { border-color: var(--ice); }
-    #room-input::placeholder { font-size: 13px; letter-spacing: 0.05em; font-family: 'Exo 2', sans-serif; color: var(--muted); }
-
-    /* Notif défi entrant */
-    #challenge-notif {
-      display: none;
-      background: var(--panel);
-      border: 2px solid var(--fire);
-      border-radius: 14px;
-      padding: 16px 18px;
-      flex-direction: column;
-      gap: 12px;
-      animation: glow-border 1s ease-in-out infinite alternate;
-    }
-    @keyframes glow-border { from { border-color: var(--fire); } to { border-color: var(--ice); } }
-
-    .notif-title { font-family: 'Orbitron', sans-serif; font-size: 13px; color: var(--text); }
-    .notif-from { font-size: 14px; color: var(--fire); font-weight: 700; display: flex; align-items: center; gap: 10px; }
-    .notif-from img { width: 32px; height: 32px; border-radius: 50%; }
-    .notif-btns { display: flex; gap: 8px; }
-
-    /* Attente room */
-    #waiting-room {
-      display: none;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 24px;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      text-align: center;
-    }
-
-    .room-badge {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 36px;
-      letter-spacing: 0.2em;
-      color: var(--fire);
-    }
-
-    .waiting { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; justify-content: center; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hp-mid); animation: pulse 1s infinite; flex-shrink: 0; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-    /* ── GAME ── */
-    #game { display: none; flex-direction: column; gap: 12px; }
-
-    #canvas-container {
-      width: 100%;
-      aspect-ratio: 16/9;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      position: relative;
-      background: #1a1a2e;
-    }
-
-    #battle-canvas { width: 100%; height: 100%; display: block; }
-
-    #overlay {
-      position: absolute; inset: 0;
-      display: none;
-      flex-direction: column;
-      align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.65);
-      border-radius: 12px;
-      gap: 16px;
-    }
-
-    #overlay-text {
-      font-family: 'Orbitron', sans-serif;
-      color: #fff;
-      font-size: clamp(20px,5vw,36px);
-      text-align: center;
-      line-height: 1.4;
-      white-space: pre-line;
-    }
-
-    .log { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 14px; min-height: 56px; line-height: 1.6; }
-
-    #combat-log { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
-    #combat-log-header { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    #combat-log-messages { height: 110px; overflow-y: auto; padding: 8px 14px; display: flex; flex-direction: column; gap: 4px; scroll-behavior: smooth; }
-    #combat-log-messages::-webkit-scrollbar { width: 4px; }
-    #combat-log-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-    .log-entry { font-size: 13px; line-height: 1.5; display: flex; gap: 8px; align-items: baseline; }
-    .log-entry .log-badge { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 7px; border-radius: 99px; font-weight: 600; flex-shrink: 0; }
-    .log-entry.me .log-badge   { background: rgba(255,85,34,0.18); color: var(--fire); border: 1px solid rgba(255,85,34,0.3); }
-    .log-entry.them .log-badge { background: rgba(34,170,255,0.18); color: var(--ice); border: 1px solid rgba(34,170,255,0.3); }
-    .log-entry.system .log-badge { background: rgba(119,119,170,0.18); color: var(--muted); border: 1px solid rgba(119,119,170,0.3); }
-    .log-entry .log-text { color: var(--text); }
-    .turn-badge { display: inline-block; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 10px; border-radius: 99px; margin-bottom: 4px; font-weight: 600; }
-    .turn-badge.mine   { background: rgba(255,85,34,0.18); color: var(--fire); border: 1px solid rgba(255,85,34,0.4); }
-    .turn-badge.theirs { background: rgba(34,170,255,0.18); color: var(--ice); border: 1px solid rgba(34,170,255,0.4); }
-
-    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .action-btn {
-      padding: 11px 12px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'Exo 2', sans-serif;
-      font-size: 14px;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.1s;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .action-btn:hover:not(:disabled) { background: #1e1e3a; border-color: var(--fire); }
-    .action-btn:active:not(:disabled) { transform: scale(0.97); }
-    .action-btn:disabled { opacity: 0.35; cursor: default; }
-    .action-btn .dmg { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
-
-    #chat-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
-    #chat-header { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    #chat-messages { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
-    #chat-messages::-webkit-scrollbar { width: 4px; }
-    #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-    .chat-msg { font-size: 13px; line-height: 1.5; display: flex; gap: 6px; align-items: baseline; }
-    .chat-msg .who { font-weight: 700; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
-    .chat-msg.me .who   { color: var(--fire); }
-    .chat-msg.them .who { color: var(--ice); }
-    .chat-msg .txt { color: var(--text); word-break: break-word; }
-    .chat-msg.system { font-size: 11px; color: var(--muted); font-style: italic; justify-content: center; }
-    #chat-input-row { display: flex; border-top: 1px solid var(--border); }
-    #chat-input { flex: 1; background: transparent; border: none; outline: none; padding: 10px 14px; font-family: 'Exo 2', sans-serif; font-size: 13px; color: var(--text); }
-    #chat-input::placeholder { color: var(--muted); }
-    #chat-send { padding: 8px 16px; background: transparent; border: none; border-left: 1px solid var(--border); color: var(--muted); font-size: 16px; cursor: pointer; transition: color 0.15s, background 0.15s; }
-    #chat-send:hover { color: var(--text); background: var(--panel2); }
-
-    footer { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; letter-spacing: 0.05em; }
-  </style>
+  <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
 
@@ -359,13 +16,17 @@
     <div class="login-title">Connexion requise</div>
     <div class="login-sub">Connecte-toi avec Discord pour voir tes amis en ligne et les défier en combat !</div>
     <button class="btn discord" onclick="login()">
-      <svg width="20" height="20" viewBox="0 0 71 55" fill="white" style="vertical-align:middle;margin-right:8px"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4a40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.4 0A39.5 39.5 0 0 0 25.5.4 58.4 58.4 0 0 0 10.8 5C1.6 18.8-1 32.2.3 45.4a58.9 58.9 0 0 0 18 9.1 42.2 42.2 0 0 0 3.6-5.9 38.4 38.4 0 0 1-6.1-2.9l1.5-1.1a41.9 41.9 0 0 0 36.2 0l1.5 1.1a38.2 38.2 0 0 1-6.1 2.9 42 42 0 0 0 3.6 5.9 58.7 58.7 0 0 0 18-9.1C72 30 68.1 16.7 60.1 4.9ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Z"/></svg>
+      <svg width="20" height="20" viewBox="0 0 71 55" fill="white" style="vertical-align:middle;margin-right:8px">
+        <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4a40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.4 0A39.5 39.5 0 0 0 25.5.4 58.4 58.4 0 0 0 10.8 5C1.6 18.8-1 32.2.3 45.4a58.9 58.9 0 0 0 18 9.1 42.2 42.2 0 0 0 3.6-5.9 38.4 38.4 0 0 1-6.1-2.9l1.5-1.1a41.9 41.9 0 0 0 36.2 0l1.5 1.1a38.2 38.2 0 0 1-6.1 2.9 42 42 0 0 0 3.6 5.9 58.7 58.7 0 0 0 18-9.1C72 30 68.1 16.7 60.1 4.9ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Z"/>
+      </svg>
       Se connecter avec Discord
     </button>
-    <div style="font-size:12px;color:var(--muted)">ou</div>
+    <div style="font-size:12px;color:var(--muted)">ou jouer sans compte</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
-      <input id="room-input-anon" type="text" maxlength="4" placeholder="Code room" style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:Orbitron,sans-serif;font-size:18px;letter-spacing:0.2em;color:var(--text);outline:none;text-transform:uppercase;text-align:center;width:140px" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
-      <button class="btn ice" onclick="joinAnon()">🔗 Rejoindre</button>
+      <input id="room-input-anon" type="text" maxlength="4" placeholder="Code room"
+        style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:Orbitron,sans-serif;font-size:18px;letter-spacing:0.2em;color:var(--text);outline:none;text-transform:uppercase;text-align:center;width:140px"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
+      <button class="btn ice"     onclick="joinAnon()">🔗 Rejoindre</button>
       <button class="btn primary" onclick="createAnon()">⚔️ Créer</button>
     </div>
   </div>
@@ -373,7 +34,6 @@
   <!-- ── LOBBY ── -->
   <div id="lobby-screen">
 
-    <!-- Profil -->
     <div id="profile-bar">
       <img class="profile-avatar" id="profile-avatar" src="" alt="avatar"/>
       <div>
@@ -383,7 +43,6 @@
       <button class="btn small danger profile-logout" onclick="logout()">Déconnexion</button>
     </div>
 
-    <!-- Notif défi entrant -->
     <div id="challenge-notif">
       <div class="notif-title">⚔️ Défi reçu !</div>
       <div class="notif-from">
@@ -392,11 +51,10 @@
       </div>
       <div class="notif-btns">
         <button class="btn primary" onclick="acceptChallenge()">✅ Accepter</button>
-        <button class="btn danger" onclick="declineChallenge()">❌ Refuser</button>
+        <button class="btn danger"  onclick="declineChallenge()">❌ Refuser</button>
       </div>
     </div>
 
-    <!-- Joueurs en ligne -->
     <div id="players-panel">
       <div id="players-header">
         <div id="players-title">🌐 Joueurs en ligne</div>
@@ -406,21 +64,20 @@
       <div id="players-empty">Aucun autre joueur en ligne pour l'instant…</div>
     </div>
 
-    <!-- Room manuelle -->
     <div id="manual-panel">
       <div class="manual-title">Rejoindre par code</div>
       <div class="room-row">
-        <input id="room-input" type="text" maxlength="4" placeholder="Ex: FIRE" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
-        <button class="btn ice" onclick="joinRoom()">🔗 Rejoindre</button>
+        <input id="room-input" type="text" maxlength="4" placeholder="Ex: FIRE"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"/>
+        <button class="btn ice"     onclick="joinRoom()">🔗 Rejoindre</button>
         <button class="btn primary" onclick="createRoom()">⚔️ Créer</button>
       </div>
     </div>
 
-    <!-- Attente room -->
     <div id="waiting-room">
       <div style="font-size:13px;color:var(--muted)">Code de la partie</div>
       <div class="room-badge" id="room-code-display">????</div>
-      <div class="waiting"><span class="dot"></span><span id="wait-status">En attente de l'adversaire…</span></div>
+      <div class="waiting"><span class="dot"></span><span id="wait-status">En attente…</span></div>
       <button class="btn small danger" onclick="cancelWait()">Annuler</button>
     </div>
 
@@ -428,948 +85,72 @@
 
   <!-- ── GAME ── -->
   <div id="game">
-    <div style="display:flex;gap:12px;align-items:stretch;">
-      <div id="canvas-container" style="flex:1;aspect-ratio:unset;height:340px;">
-        <canvas id="battle-canvas"></canvas>
-        <div id="overlay">
-          <div id="overlay-text"></div>
-          <button class="btn" onclick="askRematch()">↺ Rejouer</button>
+
+    <!-- Sélection de personnage -->
+    <div id="char-select" style="display:none;">
+      <div id="char-select-title">⚔️ Choisis ton personnage</div>
+      <div id="char-select-status"></div>
+      <div id="char-cards"></div>
+    </div>
+
+    <!-- Zone de combat -->
+    <div id="battle-area" style="display:none;flex-direction:column;gap:12px;">
+
+      <div style="display:flex;gap:12px;align-items:stretch;">
+        <div id="canvas-container">
+          <canvas id="battle-canvas"></canvas>
+          <div id="overlay">
+            <div id="overlay-text"></div>
+            <button class="btn" onclick="askRematch()">↺ Rejouer</button>
+          </div>
+        </div>
+
+        <div id="chat-panel" style="width:220px;flex-shrink:0;">
+          <div id="chat-header">💬 Chat</div>
+          <div id="chat-messages">
+            <div class="chat-msg system">Connexion établie !</div>
+          </div>
+          <div id="chat-input-row">
+            <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
+              onkeydown="if(event.key==='Enter') sendChat()"/>
+            <button id="chat-send" onclick="sendChat()">➤</button>
+          </div>
         </div>
       </div>
 
-      <div id="chat-panel" style="width:220px;flex-shrink:0;">
-        <div id="chat-header">💬 Chat</div>
-        <div id="chat-messages">
-          <div class="chat-msg system">Connexion établie !</div>
-        </div>
-        <div id="chat-input-row">
-          <input id="chat-input" type="text" placeholder="Message…" maxlength="200" onkeydown="if(event.key==='Enter') sendChat()"/>
-          <button id="chat-send" onclick="sendChat()">➤</button>
+      <div id="combat-log">
+        <div id="combat-log-header">📜 Journal de combat</div>
+        <div id="combat-log-messages"></div>
+      </div>
+
+      <div id="action-panel">
+        <div id="actions-grid" class="actions"></div>
+        <div id="waiting-action" style="display:none;text-align:center;padding:14px;font-size:13px;color:var(--muted)">
+          <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente du choix de l'adversaire…
         </div>
       </div>
-    </div>
 
-    <div id="combat-log">
-      <div id="combat-log-header">📜 Journal de combat</div>
-      <div id="combat-log-messages"></div>
-    </div>
-
-    <div id="action-panel">
-      <div id="actions-grid" class="actions"></div>
-      <div id="waiting-action" style="display:none;text-align:center;padding:14px;font-size:13px;color:var(--muted)">
-        <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente du choix de l'adversaire…
-      </div>
-    </div>
-
-
-  </div>
+    </div><!-- end battle-area -->
+  </div><!-- end game -->
 
   <footer>WebRTC P2P · Discord OAuth · Render · 100% HTML / JS / CSS</footer>
 </div>
 
+<!-- Librairies -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- Modules du jeu (ordre important) -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/network.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/combat.js"></script>
+
+<!-- Init -->
 <script>
-/* ═══════════════ CONFIG ═══════════════ */
-const SIGNAL = 'https://battle-arena-server-t781.onrender.com';
-const ICE = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' }
-];
-
-/* ═══════════════ STATE ═══════════════ */
-let myToken = localStorage.getItem('battle_token') || null;
-let myProfile = null;
-let pollInterval = null;
-let challengePollInterval = null;
-let pendingChallenge = null;
-let pc, dc, isHost = false, roomId = '';
-
-/* ═══════════════ AUTH ═══════════════ */
-function login() {
-  window.location.href = SIGNAL + '/login';
-}
-
-function logout() {
-  localStorage.removeItem('battle_token');
-  myToken = null; myProfile = null;
-  stopPolls();
-  showScreen('login');
-}
-
-async function api(path, method = 'GET', body = null) {
-  const opts = {
-    method,
-    headers: { 'Authorization': 'Bearer ' + myToken, 'Content-Type': 'application/json' }
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(SIGNAL + path, opts);
-  return r.json();
-}
-
-async function initAuth() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
-  const error = params.get('error');
-
-  if (token) {
-    myToken = token;
-    localStorage.setItem('battle_token', token);
-    window.history.replaceState({}, '', window.location.pathname);
-  }
-
-  if (error) {
-    alert('Erreur de connexion Discord. Réessaie !');
-    showScreen('login');
-    return;
-  }
-
-  if (!myToken) { showScreen('login'); return; }
-
-  try {
-    myProfile = await api('/me');
-    if (myProfile.error) { myToken = null; localStorage.removeItem('battle_token'); showScreen('login'); return; }
-    document.getElementById('profile-avatar').src = myProfile.avatar;
-    document.getElementById('profile-name').textContent = myProfile.username;
-    showScreen('lobby');
-    startPolls();
-  } catch {
-    showScreen('login');
-  }
-}
-
-/* ═══════════════ SCREENS ═══════════════ */
-function showScreen(name) {
-  document.getElementById('login-screen').style.display  = name === 'login'  ? 'flex' : 'none';
-  document.getElementById('lobby-screen').style.display  = name === 'lobby'  ? 'flex' : 'none';
-  document.getElementById('game').style.display          = name === 'game'   ? 'flex' : 'none';
-}
-
-/* ═══════════════ POLLING ═══════════════ */
-function startPolls() {
-  pollOnline();
-  pollInterval = setInterval(pollOnline, 5000);
-  challengePollInterval = setInterval(pollChallenge, 3000);
-}
-
-function stopPolls() {
-  clearInterval(pollInterval);
-  clearInterval(challengePollInterval);
-}
-
-async function pollOnline() {
-  if (!myToken) return;
-  try {
-    const list = await api('/online');
-    renderPlayers(list);
-  } catch {}
-}
-
-async function pollChallenge() {
-  if (!myToken) return;
-  try {
-    const data = await api('/challenged');
-    if (data.challenge) {
-      if (data.challenge.accepted && data.challenge.room) {
-        // Notre défi a été accepté → rejoindre la room
-        clearInterval(challengePollInterval);
-        document.getElementById('challenge-notif').style.display = 'none';
-        joinRoomAuto(data.challenge.room);
-        return;
-      }
-      if (data.challenge.declined) return;
-      if (!pendingChallenge || pendingChallenge.fromId !== data.challenge.fromId) {
-        pendingChallenge = data.challenge;
-        showChallengeNotif(data.challenge);
-      }
-    } else {
-      hideChallengeNotif();
-    }
-  } catch {}
-}
-
-/* ═══════════════ JOUEURS EN LIGNE ═══════════════ */
-function renderPlayers(list) {
-  const container = document.getElementById('players-list');
-  const empty = document.getElementById('players-empty');
-  const count = document.getElementById('online-count');
-
-  count.textContent = list.length + (list.length <= 1 ? ' joueur' : ' joueurs');
-
-  if (list.length === 0) {
-    container.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  container.innerHTML = '';
-
-  list.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    row.innerHTML = `
-      <img class="player-avatar" src="${p.avatar}" alt="${p.username}" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
-      <div class="player-name">${p.username}</div>
-      <button class="btn small primary" onclick="challengePlayer('${p.id}')" ${p.challenged ? 'disabled' : ''}>
-        ${p.challenged ? '⏳ Occupé' : '⚔️ Défier'}
-      </button>
-    `;
-    container.appendChild(row);
-  });
-}
-
-async function challengePlayer(targetId) {
-  try {
-    await api('/challenge/' + targetId, 'POST');
-    // Attendre que la cible accepte via pollChallenge
-  } catch { alert('Impossible de défier ce joueur.'); }
-}
-
-/* ═══════════════ NOTIF DÉFI ═══════════════ */
-function showChallengeNotif(challenge) {
-  document.getElementById('notif-avatar').src = challenge.avatar || '';
-  document.getElementById('notif-name').textContent = challenge.from;
-  document.getElementById('challenge-notif').style.display = 'flex';
-}
-
-function hideChallengeNotif() {
-  if (!pendingChallenge) return;
-  pendingChallenge = null;
-  document.getElementById('challenge-notif').style.display = 'none';
-}
-
-async function acceptChallenge() {
-  try {
-    const data = await api('/accept', 'POST');
-    document.getElementById('challenge-notif').style.display = 'none';
-    pendingChallenge = null;
-    // On est l'invité → rejoindre la room créée par le serveur
-    joinRoomAuto(data.room);
-  } catch { alert('Erreur lors de l\'acceptation.'); }
-}
-
-async function declineChallenge() {
-  await api('/decline', 'POST');
-  hideChallengeNotif();
-  pendingChallenge = null;
-}
-
-/* ═══════════════ ROOMS ═══════════════ */
-function randRoom() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
-}
-
-async function createRoom() {
-  roomId = randRoom();
-  isHost = true;
-  await startHost(roomId);
-}
-
-async function joinRoom() {
-  const code = document.getElementById('room-input').value.trim().toUpperCase();
-  if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
-  roomId = code;
-  isHost = false;
-  await startGuest(roomId);
-}
-
-async function joinRoomAuto(code) {
-  roomId = code;
-  isHost = false;
-  await startGuest(roomId);
-}
-
-/* Mode anonyme depuis login screen */
-async function createAnon() {
-  roomId = randRoom();
-  isHost = true;
-  showScreen('lobby');
-  document.getElementById('profile-bar').style.display = 'none';
-  document.getElementById('players-panel').style.display = 'none';
-  document.getElementById('manual-panel').style.display = 'none';
-  await startHost(roomId);
-}
-
-async function joinAnon() {
-  const code = document.getElementById('room-input-anon').value.trim().toUpperCase();
-  if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
-  roomId = code;
-  isHost = false;
-  showScreen('lobby');
-  document.getElementById('profile-bar').style.display = 'none';
-  document.getElementById('players-panel').style.display = 'none';
-  document.getElementById('manual-panel').style.display = 'none';
-  await startGuest(roomId);
-}
-
-function cancelWait() {
-  document.getElementById('waiting-room').style.display = 'none';
-  if (pc) { pc.close(); pc = null; }
-}
-
-/* ═══════════════ WEBRTC ═══════════════ */
-function newPC() {
-  pc = new RTCPeerConnection({ iceServers: ICE });
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') onConnected();
-    if (['disconnected','failed','closed'].includes(pc.connectionState)) onDisconnected();
-  };
-}
-
-function waitICE(p) {
-  return new Promise(res => {
-    if (p.iceGatheringState === 'complete') { res(); return; }
-    const fn = () => { if (p.iceGatheringState === 'complete') { p.removeEventListener('icegatheringstatechange', fn); res(); } };
-    p.addEventListener('icegatheringstatechange', fn);
-    setTimeout(res, 4000);
-  });
-}
-
-async function postSDP(key, sdp) {
-  await fetch(`${SIGNAL}/${key}`, { method: 'POST', body: sdp });
-}
-
-async function getSDP(key) {
-  const r = await fetch(`${SIGNAL}/${key}`);
-  const txt = await r.text();
-  return txt || null;
-}
-
-async function startHost(room) {
-  newPC();
-  dc = pc.createDataChannel('battle');
-  setupDC(dc);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await waitICE(pc);
-  await postSDP(room + '-OFFER', btoa(JSON.stringify(pc.localDescription)));
-
-  document.getElementById('room-code-display').textContent = room;
-  document.getElementById('wait-status').textContent = 'En attente de l\'adversaire…';
-  document.getElementById('waiting-room').style.display = 'flex';
-
-  let tries = 0;
-  pollInterval && clearInterval(pollInterval);
-  const hostPoll = setInterval(async () => {
-    tries++;
-    const raw = await getSDP(room + '-ANSWER');
-    if (raw) {
-      clearInterval(hostPoll);
-      document.getElementById('wait-status').textContent = 'Connexion en cours…';
-      await pc.setRemoteDescription(JSON.parse(atob(raw)));
-    }
-    if (tries > 60) clearInterval(hostPoll);
-  }, 2000);
-}
-
-async function startGuest(room) {
-  document.getElementById('waiting-room').style.display = 'flex';
-  document.getElementById('room-code-display').textContent = room;
-
-  let raw = null; let tries = 0;
-  while (!raw && tries < 15) {
-    document.getElementById('wait-status').textContent = `Recherche de la room ${room}… (${tries+1}/15)`;
-    raw = await getSDP(room + '-OFFER');
-    if (!raw) { await new Promise(r => setTimeout(r, 2000)); tries++; }
-  }
-  if (!raw) { alert('Room introuvable ! Vérifie le code.'); document.getElementById('waiting-room').style.display = 'none'; return; }
-
-  newPC();
-  pc.ondatachannel = e => { dc = e.channel; setupDC(dc); };
-  await pc.setRemoteDescription(JSON.parse(atob(raw)));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitICE(pc);
-  await postSDP(room + '-ANSWER', btoa(JSON.stringify(pc.localDescription)));
-  document.getElementById('wait-status').textContent = 'Réponse envoyée, connexion en cours…';
-}
-
-function setupDC(ch) {
-  ch.onopen    = () => onConnected();
-  ch.onmessage = e  => onMessage(JSON.parse(e.data));
-  ch.onerror   = e  => console.error('DC error', e);
-}
-
-function send(obj) { if (dc && dc.readyState === 'open') dc.send(JSON.stringify(obj)); }
-
-/* ═══════════════ PERSONNAGES ═══════════════ */
-const CHARS = {
-  Pyros: {
-    name: 'Pyros', icon: '⚔️', color: 0xff5522,
-    maxHP: 90, speed: 80,
-    moves: [
-      { name: 'Flamme',   icon: '🔥', dmg: 18, acc: 0.95, desc: '18 dmg · 95%' },
-      { name: 'Inferno',  icon: '💥', dmg: 38, acc: 0.60, desc: '38 dmg · 60%' },
-      { name: 'Brûlure',  icon: '🌋', dmg: 12, acc: 1.00, desc: '12 dmg · 100%' },
-      { name: 'Soin',     icon: '💚', dmg: 0,  acc: 1.00, heal: 20, desc: '+20 PV' },
-    ]
-  },
-  Glacius: {
-    name: 'Glacius', icon: '🧊', color: 0x22aaff,
-    maxHP: 110, speed: 40,
-    moves: [
-      { name: 'Blizzard',   icon: '❄️', dmg: 22, acc: 0.90, desc: '22 dmg · 90%' },
-      { name: 'Avalanche',  icon: '🌀', dmg: 45, acc: 0.55, desc: '45 dmg · 55%' },
-      { name: 'Stalactite', icon: '🧊', dmg: 14, acc: 1.00, desc: '14 dmg · 100%' },
-      { name: 'Soin',       icon: '💚', dmg: 0,  acc: 1.00, heal: 25, desc: '+25 PV' },
-    ]
-  }
-};
-
-/* ═══════════════ GAME STATE ═══════════════ */
-let myChar = null;
-let theirChar = null;
-const gs = {
-  myHP: 0, theirHP: 0,
-  myMaxHP: 0, theirMaxHP: 0,
-  myChoice: null, theirChoice: null,
-  busy: false, over: false,
-  myAnim: null, theirAnim: null
-};
-
-function onConnected() {
-  if (document.getElementById('game').style.display === 'flex') return;
-  stopPolls();
-  document.getElementById('waiting-room').style.display = 'none';
-  showScreen('game');
-
-  // Hôte = Pyros (rapide), Invité = Glacius (lent)
-  myChar    = isHost ? CHARS.Pyros   : CHARS.Glacius;
-  theirChar = isHost ? CHARS.Glacius : CHARS.Pyros;
-
-  gs.myHP      = myChar.maxHP;
-  gs.theirHP   = theirChar.maxHP;
-  gs.myMaxHP   = myChar.maxHP;
-  gs.theirMaxHP= theirChar.maxHP;
-  gs.myChoice  = null;
-  gs.theirChoice = null;
-  gs.busy = false;
-  gs.over = false;
-
-  const myName = myProfile ? myProfile.username : myChar.name;
-  document.getElementById('my-name').textContent    = myChar.icon + ' ' + myName;
-  document.getElementById('their-name').textContent = theirChar.icon + ' Adversaire';
-
-  renderMoves();
-  initThree();
-  setLog('Choisis ton attaque !', false);
-}
-
-function renderMoves() {
-  const grid = document.getElementById('actions-grid');
-  grid.innerHTML = '';
-  myChar.moves.forEach(m => {
-    const btn = document.createElement('button');
-    btn.className = 'action-btn';
-    btn.innerHTML = `${m.icon} ${m.name} <span class="dmg">${m.desc}</span>`;
-    btn.onclick = () => chooseAction(m);
-    grid.appendChild(btn);
-  });
-}
-
-function onDisconnected() {
-  if (!gs.over) setLog('⚠️ Connexion perdue avec l\'adversaire.', true);
-}
-
-function onMessage(msg) {
-  if (msg.type === 'choice')       receiveTheirChoice(msg.move);
-  if (msg.type === 'round_result') applyResult(msg);
-  if (msg.type === 'chat')         addChatMsg(msg.text, false);
-  if (msg.type === 'name')         document.getElementById('their-name').textContent = theirChar.icon + ' ' + msg.name;
-  if (msg.type === 'rematch_ask') {
-    if (rematchAsked) {
-      // Les deux ont demandé → on lance
-      send({ type: 'rematch_go' });
-      startRematch();
-    } else {
-      // L'adversaire demande, on affiche notif
-      document.querySelector('#overlay-text').textContent += '\n\nL\'adversaire veut rejouer !';
-      const btn = document.querySelector('#overlay .btn');
-      btn.textContent = '✅ Accepter la revanche';
-      btn.onclick = () => { send({ type: 'rematch_go' }); startRematch(); };
-    }
-  }
-  if (msg.type === 'rematch_go') startRematch();
-}
-
-/* ═══════════════ NOUVEAU SYSTÈME DE COMBAT ═══════════════ */
-function chooseAction(move) {
-  if (gs.myChoice || gs.busy || gs.over) return;
-  gs.myChoice = move;
-
-  document.querySelectorAll('.action-btn').forEach(b => b.disabled = true);
-  document.getElementById('waiting-action').style.display = 'block';
-  setLog(`Tu choisis ${move.icon} ${move.name} — en attente de l'adversaire…`, false);
-
-  send({ type: 'choice', move });
-
-  if (gs.theirChoice) resolveRound();
-}
-
-function receiveTheirChoice(move) {
-  gs.theirChoice = move;
-  if (gs.myChoice) resolveRound();
-  else setLog(`L'adversaire a choisi — à toi !`, true);
-}
-
-async function resolveRound() {
-  if (gs.busy || gs.over) return;
-  gs.busy = true;
-  document.getElementById('waiting-action').style.display = 'none';
-
-  const myMove    = gs.myChoice;
-  const theirMove = gs.theirChoice;
-  gs.myChoice    = null;
-  gs.theirChoice = null;
-
-  if (isHost) {
-    // L'hôte calcule les résultats aléatoires et les envoie
-    const myHit    = myMove.heal    ? true : Math.random() < myMove.acc;
-    const theirHit = theirMove.heal ? true : Math.random() < theirMove.acc;
-    const result = { type: 'round_result', myMove, theirMove, myHit, theirHit };
-    send(result);
-    await applyResult(result);
-  }
-  // L'invité attend le round_result via onMessage
-}
-
-async function applyResult(result) {
-  // Du point de vue de chaque joueur :
-  // "myMove" dans le message = le move de l'hôte
-  // On adapte selon qui on est
-  const hostMove  = result.myMove;
-  const guestMove = result.theirMove;
-  const hostHit   = result.myHit;
-  const guestHit  = result.theirHit;
-
-  // Pyros (hôte) est plus rapide → frappe en premier
-  const pyrosGoesFirst = true; // toujours vrai : Pyros vitesse 80 > Glacius 40
-
-  if (pyrosGoesFirst) {
-    // Phase 1 : Pyros attaque, Glacius défend
-    await applyMoveResult(hostMove, hostHit, isHost ? 'me' : 'them');
-    if (gs.over) return;
-    await delay(700);
-    // Phase 2 : Glacius riposte, Pyros défend
-    await applyMoveResult(guestMove, guestHit, isHost ? 'them' : 'me');
-  }
-
-  if (!gs.over) {
-    gs.busy = false;
-    renderMoves();
-    document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
-    setLog('Choisis ton attaque !', false);
-  }
-}
-
-async function applyMoveResult(move, hit, who) {
-  const isMe = who === 'me';
-
-  if (move.heal) {
-    const healAmt = move.heal;
-    if (isMe) {
-      gs.myHP = Math.min(gs.myMaxHP, gs.myHP + healAmt);
-      setLog(`Tu utilises ${move.icon} ${move.name} et récupères ${healAmt} PV !`, false);
-    } else {
-      gs.theirHP = Math.min(gs.theirMaxHP, gs.theirHP + healAmt);
-      setLog(`L'adversaire utilise ${move.icon} ${move.name} et récupère ${healAmt} PV !`, true);
-    }
-  } else if (hit) {
-    if (isMe) {
-      gs.theirHP -= move.dmg;
-      gs.myAnim = { t: 0 };
-      setTimeout(() => spawnHitParticles('their'), 300);
-      setLog(`Tu utilises ${move.icon} ${move.name} et infliges ${move.dmg} dégâts !`, false);
-    } else {
-      gs.myHP -= move.dmg;
-      gs.theirAnim = { t: 0 };
-      setTimeout(() => spawnHitParticles('mine'), 300);
-      setLog(`L'adversaire utilise ${move.icon} ${move.name} et t'inflige ${move.dmg} dégâts !`, true);
-    }
-  } else {
-    setLog(`${isMe ? 'Tu utilises' : "L'adversaire utilise"} ${move.icon} ${move.name}… mais ${isMe ? 'rates' : 'rate'} !`, !isMe);
-  }
-
-  updateBars();
-  await delay(400);
-  checkOver();
-}
-
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-function setLog(text, isEnemy) {
-  addLog(text, isEnemy ? 'them' : 'me');
-}
-
-function addLog(text, type = 'system') {
-  const box = document.getElementById('combat-log-messages');
-  if (!box) return;
-  const entry = document.createElement('div');
-  entry.className = 'log-entry ' + type;
-  const badge = document.createElement('span');
-  badge.className = 'log-badge';
-  badge.textContent = type === 'me' ? 'Toi' : type === 'them' ? 'Ennemi' : '•';
-  const txt = document.createElement('span');
-  txt.className = 'log-text';
-  txt.textContent = text;
-  entry.appendChild(badge);
-  entry.appendChild(txt);
-  box.appendChild(entry);
-  box.scrollTop = box.scrollHeight;
-}
-
-function setBusy(b) {
-  gs.busy = b;
-  document.querySelectorAll('.action-btn').forEach(btn => btn.disabled = b || gs.over);
-}
-
-function updateBars() {
-  // Mise à jour des sprites 3D uniquement
-  updateHPSprite(playerHPSprite, gs.myHP);
-  updateHPSprite(enemyHPSprite,  gs.theirHP);
-}
-
-function checkOver() {
-  if (gs.theirHP <= 0 && gs.myHP <= 0) {
-    showOverlay('🤝 Match nul !'); gs.over = true; setBusy(true); return true;
-  }
-  if (gs.theirHP <= 0) {
-    showOverlay('🏆 Victoire !\nTu as gagné !'); gs.over = true; setBusy(true); return true;
-  }
-  if (gs.myHP <= 0) {
-    showOverlay('💀 Défaite…\nTon adversaire a gagné.'); gs.over = true; setBusy(true); return true;
-  }
-  return false;
-}
-
-function showOverlay(text) {
-  document.getElementById('overlay').style.display = 'flex';
-  document.getElementById('overlay-text').textContent = text;
-}
-
-/* ═══════════════ REMATCH ═══════════════ */
-let rematchAsked = false;
-
-function askRematch() {
-  if (rematchAsked) return;
-  rematchAsked = true;
-  document.querySelector('#overlay .btn').textContent = '⏳ En attente…';
-  document.querySelector('#overlay .btn').disabled = true;
-  send({ type: 'rematch_ask' });
-}
-
-function startRematch() {
-  rematchAsked = false;
-  document.getElementById('overlay').style.display = 'none';
-
-  // Reset état
-  gs.myHP      = myChar.maxHP;
-  gs.theirHP   = theirChar.maxHP;
-  gs.myMaxHP   = myChar.maxHP;
-  gs.theirMaxHP= theirChar.maxHP;
-  gs.myChoice  = null;
-  gs.theirChoice = null;
-  gs.busy = false;
-  gs.over = false;
-  gs.myAnim = null;
-  gs.theirAnim = null;
-
-  // Reset positions personnages
-  if (playerMesh) playerMesh.position.set(-2.2, 0, 0);
-  if (enemyMesh)  enemyMesh.position.set(2.2, 0, 0);
-
-  // Reset sprites HP
-  updateHPSprite(playerHPSprite, gs.myHP);
-  updateHPSprite(enemyHPSprite,  gs.theirHP);
-
-  updateBars();
-  renderMoves();
-  document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
-  document.getElementById('waiting-action').style.display = 'none';
-
-  // Reset bouton overlay pour la prochaine fois
-  const btn = document.querySelector('#overlay .btn');
-  btn.textContent = '↺ Rejouer';
-  btn.disabled = false;
-
-  // Vide le log et ajoute séparateur si revanche
-  const box = document.getElementById('combat-log-messages');
-  if (box && box.children.length > 0) {
-    const sep = document.createElement('div');
-    sep.className = 'log-entry system';
-    sep.innerHTML = '<span class="log-badge">•</span><span class="log-text" style="color:var(--muted)">── Nouvelle partie ──</span>';
-    box.appendChild(sep);
-  }
-
-  setLog('Nouvelle partie — choisis ton attaque !', false);
-}
-
-/* ═══════════════ CHAT ═══════════════ */
-function sendChat() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
-  if (!dc || dc.readyState !== 'open') { addChatMsg('⚠️ Pas encore connecté.', null); return; }
-  send({ type: 'chat', text });
-  addChatMsg(text, true);
-  input.value = '';
-}
-
-function addChatMsg(text, isMe) {
-  const box = document.getElementById('chat-messages');
-  const div = document.createElement('div');
-  if (isMe === null) {
-    div.className = 'chat-msg system';
-    div.textContent = text;
-  } else {
-    div.className = 'chat-msg ' + (isMe ? 'me' : 'them');
-    const who = document.createElement('span');
-    who.className = 'who';
-    who.textContent = isMe
-      ? (myProfile ? myProfile.username : (isHost ? 'Pyros' : 'Glacius'))
-      : 'Adversaire';
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    txt.textContent = text;
-    div.appendChild(who);
-    div.appendChild(txt);
-  }
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-/* ═══════════════ THREE.JS ═══════════════ */
-let r3, s3, cam3, playerMesh, enemyMesh, hitParticles = [], t3 = 0;
-let playerHPSprite = null, enemyHPSprite = null;
-
-function makeHPCanvas(name, hp, maxHP, color) {
-  const W = 256, H = 80;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-
-  // Fond arrondi semi-transparent
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(10,10,26,0.75)';
-  roundRect(ctx, 4, 4, W-8, H-8, 10);
-  ctx.fill();
-
-  // Barre de fond
-  ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  roundRect(ctx, 14, 44, W-28, 18, 6);
-  ctx.fill();
-
-  // Barre de vie colorée
-  const pct = Math.max(0, hp) / maxHP;
-  const barColor = pct > 0.5 ? '#1D9E75' : pct > 0.25 ? '#EF9F27' : '#E24B4A';
-  ctx.fillStyle = barColor;
-  roundRect(ctx, 14, 44, Math.max(0, (W-28) * pct), 18, 6);
-  ctx.fill();
-
-  // Nom
-  ctx.fillStyle = color;
-  ctx.font = 'bold 18px Orbitron, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(name, W/2, 34);
-
-  // PV
-  ctx.fillStyle = 'rgba(230,230,255,0.9)';
-  ctx.font = '13px Exo 2, sans-serif';
-  ctx.fillText(`${Math.max(0,hp)} / ${maxHP}`, W/2, 76);
-
-  return c;
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-}
-
-function makeHPSprite(name, hp, maxHP, color) {
-  const canvas = makeHPCanvas(name, hp, maxHP, color);
-  const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(1.8, 0.56, 1);
-  sprite._name = name;
-  sprite._maxHP = maxHP;
-  sprite._color = color;
-  return sprite;
-}
-
-function updateHPSprite(sprite, hp) {
-  if (!sprite) return;
-  const canvas = makeHPCanvas(sprite._name, hp, sprite._maxHP, sprite._color);
-  sprite.material.map.image = canvas;
-  sprite.material.map.needsUpdate = true;
-}
-
-function initThree() {
-  const canvas = document.getElementById('battle-canvas');
-  const cont   = document.getElementById('canvas-container');
-
-  r3 = new THREE.WebGLRenderer({ canvas, antialias: true });
-  r3.setPixelRatio(window.devicePixelRatio);
-  r3.shadowMap.enabled = true;
-  r3.setClearColor(0x0d0d1a, 1);
-
-  s3 = new THREE.Scene();
-  s3.fog = new THREE.Fog(0x0d0d1a, 10, 30);
-
-  cam3 = new THREE.PerspectiveCamera(55, 2, 0.1, 100);
-  cam3.position.set(0, 2.5, 7);
-  cam3.lookAt(0, 1, 0);
-
-  function resize() {
-    const w = cont.clientWidth, h = cont.clientHeight;
-    r3.setSize(w, h, false);
-    cam3.aspect = w / h;
-    cam3.updateProjectionMatrix();
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  s3.add(new THREE.AmbientLight(0x8888cc, 0.6));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-  dir.position.set(5, 8, 5); dir.castShadow = true; s3.add(dir);
-
-  const pl1 = new THREE.PointLight(0xff6600, 1.5, 8); pl1.position.set(-3,2,2); s3.add(pl1);
-  const pl2 = new THREE.PointLight(0x00aaff, 1.5, 8); pl2.position.set(3,2,2);  s3.add(pl2);
-  s3._pl1 = pl1; s3._pl2 = pl2;
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16,16,8,8), new THREE.MeshStandardMaterial({color:0x12122a,roughness:0.8}));
-  floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; s3.add(floor);
-  s3.add(new THREE.GridHelper(16,16,0x2a2a6a,0x1a1a44));
-
-  const arena = new THREE.Mesh(new THREE.CircleGeometry(3,64), new THREE.MeshStandardMaterial({color:0x1a1a3a,roughness:0.5}));
-  arena.rotation.x = -Math.PI/2; arena.position.y = 0.02; s3.add(arena);
-
-  addParticles(0xff6600); addParticles(0x00aaff);
-
-  const myCol    = isHost ? 0xff5522 : 0x22aaff;
-  const theirCol = isHost ? 0x22aaff : 0xff5522;
-  const myColorHex    = isHost ? '#ff5522' : '#22aaff';
-  const theirColorHex = isHost ? '#22aaff' : '#ff5522';
-
-  playerMesh = makeChar(myCol, isHost);
-  playerMesh.position.set(-2.2,0,0); playerMesh.rotation.y = 0.3; s3.add(playerMesh);
-
-  enemyMesh = makeChar(theirCol, !isHost);
-  enemyMesh.position.set(2.2,0,0); enemyMesh.rotation.y = Math.PI-0.3; s3.add(enemyMesh);
-
-  // Sprites PV au dessus des personnages
-  const myName    = myProfile ? myProfile.username : myChar.name;
-  const theirName = theirChar.name;
-
-  playerHPSprite = makeHPSprite(myName, gs.myHP, gs.myMaxHP, myColorHex);
-  playerHPSprite.position.set(-2.2, 3.0, 0);
-  s3.add(playerHPSprite);
-
-  enemyHPSprite = makeHPSprite(theirName, gs.theirHP, gs.theirMaxHP, theirColorHex);
-  enemyHPSprite.position.set(2.2, 3.0, 0);
-  s3.add(enemyHPSprite);
-
-  animate3();
-}
-
-function addParticles(color) {
-  const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(40*3);
-  for (let i=0;i<40;i++) { pos[i*3]=(Math.random()-0.5)*8; pos[i*3+1]=Math.random()*4; pos[i*3+2]=(Math.random()-0.5)*4-2; }
-  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-  s3.add(new THREE.Points(geo, new THREE.PointsMaterial({color,size:0.06,transparent:true,opacity:0.6})));
-}
-
-function makeChar(col, isFireType) {
-  const g = new THREE.Group();
-  const dark = isFireType ? 0xcc3300 : 0x0077cc;
-  const mat  = new THREE.MeshStandardMaterial({color:col, roughness:0.4, metalness:0.3});
-  const dmat = new THREE.MeshStandardMaterial({color:dark,roughness:0.4});
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.5),mat); body.position.y=1.15; body.castShadow=true; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32,16,16),mat); head.position.y=1.9; head.castShadow=true; g.add(head);
-
-  [[-0.18],[0.18]].forEach(([x]) => {
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.7,12),dmat);
-    l.position.set(x,0.35,0); l.castShadow=true; g.add(l);
-  });
-  [[-0.48,0.4],[0.48,-0.4]].forEach(([x,rz]) => {
-    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.6,12),dmat);
-    a.position.set(x,1.15,0); a.rotation.z=rz; g.add(a);
-  });
-
-  if (isFireType) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8), new THREE.MeshStandardMaterial({color:0xffcc00,emissive:0xff8800,emissiveIntensity:0.5}));
-    e.position.set(0,1.2,0.28); g.add(e);
-  } else {
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.3,8), new THREE.MeshStandardMaterial({color:0x88ddff,emissive:0x0088ff,emissiveIntensity:0.4}));
-    sp.position.set(0,2.28,0); g.add(sp);
-  }
-
-  const sh = new THREE.Mesh(new THREE.CircleGeometry(0.45,16), new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.25}));
-  sh.rotation.x=-Math.PI/2; sh.position.y=0.03; g.add(sh);
-  return g;
-}
-
-function spawnHitParticles(who) {
-  const isMine = who === 'mine';
-  const bx = isMine ? -2.2 : 2.2;
-  const color = isMine ? 0xff2200 : 0x00aaff;
-  for (let i=0;i<14;i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.06+Math.random()*0.06,6,6), new THREE.MeshBasicMaterial({color}));
-    m.position.set(bx+(Math.random()-0.5)*0.5, 1.2+(Math.random()-0.5)*0.6, (Math.random()-0.5)*0.4);
-    m.userData = {vx:(Math.random()-0.5)*0.06, vy:0.04+Math.random()*0.04, vz:(Math.random()-0.5)*0.04, life:1};
-    s3.add(m); hitParticles.push(m);
-  }
-}
-
-function animate3() {
-  requestAnimationFrame(animate3);
-  t3 += 0.016;
-
-  if (playerMesh) playerMesh.position.y = Math.sin(t3*1.5)*0.04;
-  if (enemyMesh)  enemyMesh.position.y  = Math.sin(t3*1.5+Math.PI)*0.04;
-
-  // Les sprites PV suivent le personnage en X
-  if (playerHPSprite && playerMesh) playerHPSprite.position.x = playerMesh.position.x;
-  if (enemyHPSprite  && enemyMesh)  enemyHPSprite.position.x  = enemyMesh.position.x;
-
-  if (gs.myAnim && playerMesh) {
-    gs.myAnim.t += 0.05;
-    playerMesh.position.x = gs.myAnim.t < 1 ? -2.2+Math.sin(gs.myAnim.t*Math.PI)*1.2 : -2.2;
-    if (gs.myAnim.t >= 1) gs.myAnim = null;
-  }
-  if (gs.theirAnim && enemyMesh) {
-    gs.theirAnim.t += 0.05;
-    enemyMesh.position.x = gs.theirAnim.t < 1 ? 2.2-Math.sin(gs.theirAnim.t*Math.PI)*1.2 : 2.2;
-    if (gs.theirAnim.t >= 1) gs.theirAnim = null;
-  }
-
-  hitParticles = hitParticles.filter(p => {
-    p.userData.life -= 0.04; p.userData.vy -= 0.002;
-    p.position.x += p.userData.vx; p.position.y += p.userData.vy; p.position.z += p.userData.vz;
-    p.material.opacity = p.userData.life; p.material.transparent = true;
-    if (p.userData.life <= 0) { s3.remove(p); return false; } return true;
-  });
-
-  if (s3._pl1) s3._pl1.intensity = 1.3+Math.sin(t3*2.1)*0.3;
-  if (s3._pl2) s3._pl2.intensity = 1.3+Math.sin(t3*1.7+1)*0.3;
-
-  r3.render(s3, cam3);
-}
-
-/* ═══════════════ INIT ═══════════════ */
-initAuth();
+  initAuth();
 </script>
+
 </body>
 </html>
