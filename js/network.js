@@ -1,358 +1,357 @@
-/* ═══════════════ NETWORK — Hub WebRTC ═══════════════
-   L'hôte (slot 0) est connecté à tous les autres.
-   Les guests se connectent uniquement à l'hôte.
-   L'hôte redistribue les messages à tous.
-================================================================ */
+'use strict';
+/* ═══════════════ NETWORK ═══════════════
+   Hub model : hôte (slot 0) connecté à tous les guests.
+   Guests → connectés à l'hôte uniquement.
+   L'hôte redistribue (broadcast) tous les messages.
 
-let isHost   = false;
-let roomId   = '';
-let mySlot   = 0;      // index dans la room (0 = hôte)
-let numPlayers = 0;    // nombre total de joueurs attendus
+   CORRECTION BUG LOBBY :
+   - onPeerUp déclenche la transition waiting-room → game-lobby pour l'hôte
+   - L'hôte reçoit "hello" et répond avec lobby_state complet
+   - Le guest reçoit lobby_state et passe lui aussi en game-lobby
+   - Un seul fichier réseau (network.js), plus de conflit net.js/network.js
+================================================ */
 
-// Connexions WebRTC : hôte a N-1 pcs, guest en a 1
-const pcs = {};  // { slot: RTCPeerConnection }
-const dcs = {};  // { slot: RTCDataChannel }
+const pcs = {};   // slot → RTCPeerConnection
+const dcs = {};   // slot → RTCDataChannel
 
-let pollInterval          = null;
-let challengePollInterval = null;
-let pendingChallenge      = null;
+/* ── Discord API ── */
+const api = async (path, method = 'GET', data = null) => {
+  const r = await fetch(SIGNAL + path, {
+    method,
+    headers: { Authorization: `Bearer ${G.myToken}`, 'Content-Type': 'application/json' },
+    ...(data ? { body: JSON.stringify(data) } : {})
+  });
+  return r.json();
+};
 
 /* ── Signaling HTTP ── */
-async function postSDP(key, sdp) {
-  await fetch(`${SIGNAL}/${key}`, { method: 'POST', body: sdp });
-}
-
-async function getSDP(key) {
+const postSDP = (key, sdp) => fetch(`${SIGNAL}/${key}`, { method: 'POST', body: sdp });
+const getSDP  = async key => {
   const r = await fetch(`${SIGNAL}/${key}`);
-  const txt = await r.text();
-  return txt || null;
-}
+  const t = await r.text();
+  return t || null;
+};
 
-/* ── Création d'une connexion WebRTC ── */
-function newPC(slot) {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+/* ── WebRTC ── */
+const newPC = slot => {
+  const pc = new RTCPeerConnection({ iceServers: ICE });
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') onPeerConnected(slot);
-    if (['disconnected','failed','closed'].includes(pc.connectionState)) onPeerDisconnected(slot);
+    if (pc.connectionState === 'connected')                                onPeerUp(slot);
+    if (['disconnected','failed','closed'].includes(pc.connectionState))   onPeerDown(slot);
   };
   pcs[slot] = pc;
   return pc;
-}
+};
 
-function waitICE(pc) {
-  return new Promise(res => {
-    if (pc.iceGatheringState === 'complete') { res(); return; }
-    const fn = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', fn); res(); } };
-    pc.addEventListener('icegatheringstatechange', fn);
-    setTimeout(res, 4000);
-  });
-}
-
-/* ── Envoyer un message ── */
-// Envoie à un slot spécifique (hôte seulement)
-function sendTo(slot, obj) {
-  const dc = dcs[slot];
-  if (dc && dc.readyState === 'open') dc.send(JSON.stringify(obj));
-}
-
-// Broadcast à tous sauf soi-même (hôte)
-function broadcast(obj, exceptSlot = -1) {
-  Object.entries(dcs).forEach(([slot, dc]) => {
-    if (parseInt(slot) !== exceptSlot && dc.readyState === 'open') {
-      dc.send(JSON.stringify(obj));
+const waitICE = pc => new Promise(ok => {
+  if (pc.iceGatheringState === 'complete') { ok(); return; }
+  const fn = () => {
+    if (pc.iceGatheringState === 'complete') {
+      pc.removeEventListener('icegatheringstatechange', fn);
+      ok();
     }
-  });
-}
-
-// Envoie vers l'hôte (guest) ou broadcast (hôte)
-function send(obj) {
-  if (isHost) {
-    broadcast(obj);
-  } else {
-    sendTo(0, obj); // le guest envoie toujours à l'hôte (slot 0)
-  }
-}
-
-// Envoie à tous y compris soi-même (pour traitement uniforme)
-function sendAll(obj) {
-  onMessage(obj); // traite localement
-  if (isHost) broadcast(obj);
-  else sendTo(0, obj);
-}
-
-/* ── Réception d'un message ── */
-function onDCMessage(slot, raw) {
-  const msg = JSON.parse(raw);
-  msg._from = slot; // ajoute l'expéditeur
-
-  if (isHost) {
-    // L'hôte redistribue aux autres puis traite
-    broadcast(msg, slot);
-  }
-  onMessage(msg);
-}
-
-/* ── Setup DataChannel ── */
-function setupDC(dc, slot) {
-  dcs[slot] = dc;
-  dc.onopen = () => {
-    setTimeout(() => {
-      send({ type: 'pseudo', name: myPseudo || 'Joueur', slot: mySlot });
-    }, 100);
-    onPeerConnected(slot);
   };
-  dc.onmessage = e => onDCMessage(slot, e.data);
-  dc.onerror   = e => console.error(`DC[${slot}] error`, e);
-}
+  pc.addEventListener('icegatheringstatechange', fn);
+  setTimeout(ok, 4000);
+});
 
-/* ── Rooms ── */
-function randRoom() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
-}
+const setupDC = (dc, slot) => {
+  dcs[slot] = dc;
+  dc.onopen    = () => {
+    // Envoyer notre identité dès l'ouverture du canal
+    setTimeout(() => {
+      const hello = { type: 'hello', slot: G.mySlot, pseudo: G.myPseudo || 'Joueur', avatar: G.myProfile?.avatar || null };
+      // Le guest envoie à l'hôte ; l'hôte envoie à tous
+      sendTo(slot, hello);
+    }, 150);
+    onPeerUp(slot);
+  };
+  dc.onmessage = e  => recv(slot, JSON.parse(e.data));
+  dc.onerror   = e  => console.warn('DC error slot', slot, e);
+};
 
-/* ── Créer une room (hôte) ── */
-async function createRoom() {
-  if (!myPseudo) { const p = promptPseudo(); if (!p) return; myPseudo = p; }
-  roomId  = randRoom();
-  isHost  = true;
-  mySlot  = 0;
-  numPlayers = MODES[currentMode].maxPlayers;
-  await startHost(roomId);
-}
+/* ── Envoi / réception ── */
+const sendTo = (slot, msg) => {
+  const dc = dcs[slot];
+  if (dc && dc.readyState === 'open') dc.send(JSON.stringify(msg));
+};
 
-/* ── Rejoindre une room (guest) ── */
-async function joinRoom() {
-  if (!myPseudo) { const p = promptPseudo(); if (!p) return; myPseudo = p; }
-  const code = document.getElementById('room-input').value.trim().toUpperCase();
-  if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
-  roomId = code;
-  isHost = false;
-  await startGuest(roomId);
-}
+const broadcast = (msg, except = -1) => {
+  Object.entries(dcs).forEach(([s, dc]) => {
+    if (+s !== except && dc.readyState === 'open') dc.send(JSON.stringify(msg));
+  });
+};
 
-async function joinRoomAuto(code, host) {
-  roomId = code;
-  isHost = host;
-  mySlot = host ? 0 : -1; // sera assigné par l'hôte
-  if (isHost) await startHost(roomId);
-  else        await startGuest(roomId);
-}
+// send : hôte → broadcast à tous ; guest → envoie à l'hôte (slot 0)
+const send = msg => {
+  if (G.isHost) broadcast(msg);
+  else sendTo(0, msg);
+};
 
-async function createAnon() {
-  const p = promptPseudo(); if (!p) return; myPseudo = p;
-  roomId = randRoom(); isHost = true; mySlot = 0;
-  numPlayers = MODES[currentMode].maxPlayers;
-  showScreen('lobby');
-  ['profile-bar','players-panel','manual-panel'].forEach(id => document.getElementById(id).style.display = 'none');
-  await startHost(roomId);
-}
+// Réception : l'hôte redistribue puis traite
+const recv = (fromSlot, msg) => {
+  if (G.isHost && fromSlot !== 0) broadcast(msg, fromSlot);
+  onMessage(msg);
+};
 
-async function joinAnon() {
-  const p = promptPseudo(); if (!p) return; myPseudo = p;
-  const code = document.getElementById('room-input-anon').value.trim().toUpperCase();
-  if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
-  roomId = code; isHost = false;
-  showScreen('lobby');
-  ['profile-bar','players-panel','manual-panel'].forEach(id => document.getElementById(id).style.display = 'none');
-  await startGuest(roomId);
-}
-
-function promptPseudo() {
-  const p = prompt('Entre ton pseudo :');
-  if (!p || !p.trim()) return null;
-  return p.trim().slice(0, 20);
-}
-
-function cancelWait() {
-  document.getElementById('waiting-room').style.display = 'none';
-  Object.values(pcs).forEach(pc => pc.close());
-}
-
-/* ── Hôte : crée N-1 offres (une par guest slot) ── */
-async function startHost(room) {
-  const n = numPlayers;
-
-  document.getElementById('room-code-display').textContent = room;
-  document.getElementById('wait-status').textContent = `En attente des joueurs… (1/${n})`;
-  document.getElementById('waiting-room').style.display = 'flex';
-
-  // Crée une offre pour chaque slot guest
-  for (let slot = 1; slot < n; slot++) {
+/* ── Hôte : crée 3 offres (slots 1-3) ── */
+const startHost = async () => {
+  for (let slot = 1; slot <= 3; slot++) {
     const pc = newPC(slot);
-    const dc = pc.createDataChannel('battle');
+    const dc = pc.createDataChannel('ba');
     setupDC(dc, slot);
-
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     await waitICE(pc);
-    await postSDP(`${room}-OFFER-${slot}`, btoa(JSON.stringify(pc.localDescription)));
+    await postSDP(`${G.roomId}-O${slot}`, btoa(JSON.stringify(pc.localDescription)));
   }
 
-  // Polling pour recevoir les réponses
-  let connected = 0;
-  const hostPoll = setInterval(async () => {
-    for (let slot = 1; slot < n; slot++) {
-      if (dcs[slot] && dcs[slot].readyState === 'open') continue;
-      const raw = await getSDP(`${room}-ANSWER-${slot}`);
-      if (raw) {
-        await pcs[slot].setRemoteDescription(JSON.parse(atob(raw)));
-      }
-    }
-    connected = Object.values(dcs).filter(dc => dc.readyState === 'open').length;
-    document.getElementById('wait-status').textContent = `En attente des joueurs… (${connected+1}/${n})`;
-    if (connected >= n - 1) clearInterval(hostPoll);
-  }, 2000);
-}
-
-/* ── Guest : récupère l'offre de l'hôte ── */
-async function startGuest(room) {
-  document.getElementById('waiting-room').style.display = 'flex';
-  document.getElementById('room-code-display').textContent = room;
-
-  // Cherche quel slot est dispo (essaie slot 1, 2, 3)
-  let myOffer = null;
-  let foundSlot = -1;
-  let tries = 0;
-
-  while (!myOffer && tries < 20) {
-    document.getElementById('wait-status').textContent = `Recherche de la room ${room}… (${tries+1}/20)`;
+  // Polling answers
+  G._hostPoll = setInterval(async () => {
     for (let slot = 1; slot <= 3; slot++) {
-      if (mySlot === slot) continue;
-      const raw = await getSDP(`${room}-OFFER-${slot}`);
+      if (dcs[slot]?.readyState === 'open') continue;
+      const raw = await getSDP(`${G.roomId}-A${slot}`);
       if (raw) {
-        myOffer    = raw;
-        foundSlot  = slot;
-        mySlot     = slot;
-        break;
+        try { await pcs[slot].setRemoteDescription(JSON.parse(atob(raw))); } catch {}
       }
     }
-    if (!myOffer) { await new Promise(r => setTimeout(r, 2000)); tries++; }
-  }
+    updateWaitStatus();
+  }, 2000);
+};
 
-  if (!myOffer) {
-    alert('Room introuvable ou complète !');
-    document.getElementById('waiting-room').style.display = 'none';
-    return;
-  }
+/* ── Guest : récupère une offre ── */
+const startGuest = async () => {
+  setWaitStatus(`Recherche de la room ${G.roomId}…`);
+  let raw = null, foundSlot = -1, tries = 0;
 
-  const pc = newPC(0); // connecté à l'hôte (slot 0)
-  pc.ondatachannel = e => setupDC(e.channel, 0);
-  await pc.setRemoteDescription(JSON.parse(atob(myOffer)));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitICE(pc);
-  await postSDP(`${room}-ANSWER-${foundSlot}`, btoa(JSON.stringify(pc.localDescription)));
-  document.getElementById('wait-status').textContent = 'Réponse envoyée, connexion en cours…';
-}
-
-/* ── Connexions ── */
-let connectedCount = 0;
-
-function onPeerConnected(slot) {
-  connectedCount++;
-  const needed = isHost ? (numPlayers - 1) : 1;
-  if (connectedCount >= needed) {
-    if (isHost) {
-      // Informe tous les guests du mode, du nombre de joueurs et de leurs slots
-      setTimeout(() => {
-        broadcast({ type: 'room_info', mode: currentMode, teamHPMode, numPlayers, slots: buildSlotMap() });
-        onAllConnected();
-      }, 300);
-    } else {
-      onAllConnected();
+  while (!raw && tries < 15) {
+    for (let s = 1; s <= 3; s++) {
+      raw = await getSDP(`${G.roomId}-O${s}`);
+      if (raw) { foundSlot = s; G.mySlot = s; break; }
     }
+    if (!raw) { await delay(2000); tries++; setWaitStatus(`Recherche… (${tries}/15)`); }
+  }
+
+  if (!raw) { alert('Room introuvable !'); showScreen('login'); return; }
+
+  const pc = newPC(0);
+  pc.ondatachannel = e => setupDC(e.channel, 0);
+  await pc.setRemoteDescription(JSON.parse(atob(raw)));
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  await waitICE(pc);
+  await postSDP(`${G.roomId}-A${foundSlot}`, btoa(JSON.stringify(pc.localDescription)));
+  setWaitStatus('Connexion en cours…');
+};
+
+/* ── Callbacks connexion ──
+   BUG FIX : c'est ici qu'on déclenche la transition vers le game-lobby
+   Pour l'hôte : dès qu'un peer se connecte → sortir du waiting-room → game-lobby
+   Pour le guest : la transition arrive via message lobby_state reçu de l'hôte
+*/
+function onPeerUp(slot) {
+  updateWaitStatus();
+
+  if (G.isHost) {
+    // Arrêter le waiting-room, passer en game-lobby
+    clearInterval(G._hostPoll);
+    G._hostPoll = null;
+    stopPolls();
+    document.getElementById('waiting-room').style.display = 'none';
+    // Cacher le wrapper anon si présent
+    const anonWrap = document.getElementById('anon-wait-wrap');
+    if (anonWrap) anonWrap.style.display = 'none';
+    showScreen('game');
+    G.phase = 'lobby';
+
+    // Hôte : s'ajouter lui-même si pas encore fait
+    if (!G.lobbyPlayers.find(p => p.slot === 0)) {
+      G.lobbyPlayers = [{ slot: 0, pseudo: G.myPseudo, avatar: G.myProfile?.avatar || null, ready: false }];
+    }
+    renderLobby();
+
+    // Relancer le polling des answers pour d'éventuels joueurs supplémentaires
+    G._hostPoll = setInterval(async () => {
+      for (let s = 1; s <= 3; s++) {
+        if (dcs[s]?.readyState === 'open') continue;
+        const raw = await getSDP(`${G.roomId}-A${s}`);
+        if (raw) {
+          try { await pcs[s].setRemoteDescription(JSON.parse(atob(raw))); } catch {}
+        }
+      }
+    }, 2000);
+  }
+  // Guest : il attendra le message lobby_state de l'hôte (géré dans handleLobbyMessage)
+}
+
+function onPeerDown(slot) {
+  if (G.phase !== 'over' && G.phase !== 'idle') {
+    addLog(`⚠️ Joueur ${slot + 1} déconnecté.`, 'system');
   }
 }
 
-function buildSlotMap() {
-  // L'hôte construit la map slot → pseudo
-  const map = { 0: myPseudo || 'Hôte' };
-  return map;
+function updateWaitStatus() {
+  const connected = Object.values(dcs).filter(dc => dc.readyState === 'open').length;
+  const total = connected + 1;
+  setWaitStatus(`${total} joueur${total > 1 ? 's' : ''} connecté${total > 1 ? 's' : ''}…`);
 }
 
-function onPeerDisconnected(slot) {
-  if (!gs.over) addLog(`⚠️ Joueur ${slot+1} déconnecté.`, 'system');
+/* ── Rooms haut niveau ── */
+const randRoom4 = () =>
+  Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 23)]).join('');
+
+const ensurePseudo = () => {
+  if (G.myPseudo) return G.myPseudo;
+  const p = prompt('Ton pseudo :')?.trim().slice(0, 20);
+  return p || null;
+};
+
+async function createRoom() {
+  const p = ensurePseudo(); if (!p) return;
+  G.myPseudo = p; G.isHost = true; G.mySlot = 0; G.roomId = randRoom4();
+  G.lobbyPlayers = [{ slot: 0, pseudo: p, avatar: G.myProfile?.avatar || null, ready: false }];
+  G.phase = 'waiting';
+  showScreen('lobby');
+  showRoomWait();
+  await startHost();
 }
 
-function onAllConnected() {
-  if (document.getElementById('game').style.display === 'flex') return;
-  stopPolls();
+async function joinRoom() {
+  const p = ensurePseudo(); if (!p) return;
+  const code = document.getElementById('room-input').value.trim().toUpperCase();
+  if (code.length !== 4) { alert('Code de 4 lettres requis !'); return; }
+  G.myPseudo = p; G.isHost = false; G.roomId = code;
+  G.phase = 'waiting';
+  showScreen('lobby');
+  showRoomWait();
+  await startGuest();
+}
+
+async function createAnon() {
+  const p = ensurePseudo(); if (!p) return;
+  G.myPseudo = p; G.isHost = true; G.mySlot = 0; G.roomId = randRoom4();
+  G.lobbyPlayers = [{ slot: 0, pseudo: p, avatar: null, ready: false }];
+  G.phase = 'waiting';
+  // Mode anonyme : on affiche un écran minimal sans le lobby Discord
+  showAnonWait();
+  await startHost();
+}
+
+async function joinAnon() {
+  const p = ensurePseudo(); if (!p) return;
+  const code = document.getElementById('room-input-anon').value.trim().toUpperCase();
+  if (code.length !== 4) { alert('Code de 4 lettres requis !'); return; }
+  G.myPseudo = p; G.isHost = false; G.roomId = code;
+  G.phase = 'waiting';
+  // Mode anonyme : on affiche un écran minimal sans le lobby Discord
+  showAnonWait();
+  await startGuest();
+}
+
+function showAnonWait() {
+  // En mode anonyme : cacher tout sauf le waiting-room
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('lobby-screen').style.display = 'none';
+  document.getElementById('game').style.display         = 'none';
+  showRoomWait();
+}
+
+function showRoomWait() {
+  document.getElementById('room-code-display').textContent = G.roomId;
+  setWaitStatus('Connexion…');
+  document.getElementById('waiting-room').style.display = 'flex';
+}
+
+function cancelWait() {
+  clearInterval(G._hostPoll);
+  Object.values(pcs).forEach(pc => { try { pc.close(); } catch {} });
   document.getElementById('waiting-room').style.display = 'none';
-  showScreen('game');
-  showCharSelect();
+  const anonWrap = document.getElementById('anon-wait-wrap');
+  if (anonWrap) anonWrap.style.display = 'none';
+  G.phase = 'idle';
+  // Retourner à l'écran de login
+  showScreen('login');
 }
 
-/* ── Polling joueurs en ligne ── */
-async function api(path, method = 'GET', body = null) {
-  const opts = { method, headers: { 'Authorization': 'Bearer ' + myToken, 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(SIGNAL + path, opts);
-  return r.json();
-}
+const setWaitStatus = t => {
+  const el = document.getElementById('wait-status');
+  if (el) el.textContent = t;
+};
+
+/* ── Discord polls ── */
+let _pollI = null, _chalI = null, _pendingChallenge = null;
 
 function startPolls() {
   pollOnline();
-  pollInterval = setInterval(pollOnline, 5000);
-  challengePollInterval = setInterval(pollChallenge, 3000);
+  _pollI = setInterval(pollOnline, 5000);
+  _chalI = setInterval(pollChallenge, 3000);
 }
 
 function stopPolls() {
-  clearInterval(pollInterval);
-  clearInterval(challengePollInterval);
+  clearInterval(_pollI);
+  clearInterval(_chalI);
+  _pollI = null; _chalI = null;
 }
 
 async function pollOnline() {
-  if (!myToken) return;
-  try { renderPlayers(await api('/online')); } catch {}
+  if (!G.myToken) return;
+  try { renderOnlinePlayers(await api('/online')); } catch {}
 }
 
 async function pollChallenge() {
-  if (!myToken) return;
+  if (!G.myToken) return;
   try {
-    const data = await api('/challenged');
-    if (data.challenge) {
-      if (data.challenge.accepted && data.challenge.room) {
-        clearInterval(challengePollInterval);
-        document.getElementById('challenge-notif').style.display = 'none';
-        roomId = data.challenge.room;
-        isHost = data.challenge.isHost === true;
-        mySlot = isHost ? 0 : -1;
-        numPlayers = 2; // défis Discord = 1v1 par défaut
-        if (isHost) await startHost(roomId);
-        else        await startGuest(roomId);
-        return;
+    const { challenge: c } = await api('/challenged');
+    if (!c) { hideNotif(); return; }
+    if (c.accepted && c.room) {
+      clearInterval(_chalI); _chalI = null;
+      hideNotif();
+      G.roomId = c.room; G.isHost = c.isHost; G.mySlot = G.isHost ? 0 : -1;
+      G.phase = 'waiting';
+      if (G.isHost) {
+        G.lobbyPlayers = [{ slot: 0, pseudo: G.myPseudo, avatar: G.myProfile?.avatar || null, ready: false }];
       }
-      if (data.challenge.declined) return;
-      if (!pendingChallenge || pendingChallenge.fromId !== data.challenge.fromId) {
-        pendingChallenge = data.challenge;
-        showChallengeNotif(data.challenge);
-      }
-    } else { hideChallengeNotif(); }
+      showRoomWait();
+      G.isHost ? await startHost() : await startGuest();
+      return;
+    }
+    if (c.declined) { hideNotif(); return; }
+    if (_pendingChallenge?.fromId !== c.fromId) { _pendingChallenge = c; showNotif(c); }
   } catch {}
 }
 
-async function challengePlayer(targetId) {
-  try { await api('/challenge/' + targetId, 'POST'); }
+async function challengePlayer(id) {
+  try { await api(`/challenge/${id}`, 'POST'); }
   catch { alert('Impossible de défier ce joueur.'); }
 }
 
 async function acceptChallenge() {
   try {
-    const data = await api('/accept', 'POST');
-    document.getElementById('challenge-notif').style.display = 'none';
-    pendingChallenge = null;
-    roomId = data.room;
-    isHost = data.isHost === true;
-    mySlot = isHost ? 0 : -1;
-    numPlayers = 2;
-    if (isHost) await startHost(roomId);
-    else        await startGuest(roomId);
+    const d = await api('/accept', 'POST');
+    hideNotif(); _pendingChallenge = null;
+    G.roomId = d.room; G.isHost = d.isHost; G.mySlot = G.isHost ? 0 : -1;
+    G.phase = 'waiting';
+    if (G.isHost) {
+      G.lobbyPlayers = [{ slot: 0, pseudo: G.myPseudo, avatar: G.myProfile?.avatar || null, ready: false }];
+    }
+    showRoomWait();
+    G.isHost ? await startHost() : await startGuest();
   } catch { alert('Erreur lors de l\'acceptation.'); }
 }
 
 async function declineChallenge() {
-  await api('/decline', 'POST');
-  hideChallengeNotif();
-  pendingChallenge = null;
+  try { await api('/decline', 'POST'); } catch {}
+  hideNotif(); _pendingChallenge = null;
 }
+
+const showNotif = c => {
+  document.getElementById('notif-avatar').src = c.avatar || '';
+  document.getElementById('notif-name').textContent = c.from;
+  document.getElementById('challenge-notif').style.display = 'flex';
+};
+
+const hideNotif = () => {
+  _pendingChallenge = null;
+  const el = document.getElementById('challenge-notif');
+  if (el) el.style.display = 'none';
+};

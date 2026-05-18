@@ -16,27 +16,36 @@ async function initAuth() {
   if (!G.myToken) { showScreen('login'); return; }
 
   try {
-    const me = await (await fetch(SIGNAL+'/me',{headers:{Authorization:`Bearer ${G.myToken}`}})).json();
-    if (me.error) { G.myToken=null; localStorage.removeItem('ba_token'); showScreen('login'); return; }
+    const me = await (await fetch(SIGNAL + '/me', {
+      headers: { Authorization: `Bearer ${G.myToken}` }
+    })).json();
+
+    if (me.error) {
+      G.myToken = null;
+      localStorage.removeItem('ba_token');
+      showScreen('login');
+      return;
+    }
+
     G.myProfile = me;
     G.myPseudo  = me.username;
-    document.getElementById('profile-avatar').src = me.avatar;
+    document.getElementById('profile-avatar').src      = me.avatar;
     document.getElementById('profile-name').textContent = me.username;
     showScreen('lobby');
     startPolls();
-  } catch(e) { 
-  console.warn('Auth error:', e);
-  G.myToken = null;
-  localStorage.removeItem('ba_token');
-  showScreen('login'); 
-}
+  } catch (e) {
+    console.warn('Auth error:', e);
+    G.myToken = null;
+    localStorage.removeItem('ba_token');
+    showScreen('login');
+  }
 }
 
-function login()  { location.href = SIGNAL+'/login'; }
+function login() { location.href = SIGNAL + '/login'; }
 
 function logout() {
   localStorage.removeItem('ba_token');
-  G.myToken=null; G.myProfile=null; G.myPseudo=null;
+  G.myToken = null; G.myProfile = null; G.myPseudo = null;
   stopPolls();
   showScreen('login');
 }

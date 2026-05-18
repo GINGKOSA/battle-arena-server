@@ -20,36 +20,34 @@ const CHARS = {
     name:'Pyros', icon:'⚔️', colorHex:'#ff5522', color3D:0xff5522,
     maxHP:90, speed:80,
     moves:[
-      {name:'Flamme',  icon:'🔥',dmg:18,acc:.95,desc:'18·95%'},
-      {name:'Inferno', icon:'💥',dmg:38,acc:.60,desc:'38·60%'},
-      {name:'Brûlure', icon:'🌋',dmg:12,acc:1,  desc:'12·100%'},
-      {name:'Soin',    icon:'💚',dmg:0, acc:1,  heal:20,desc:'+20 PV'},
+      {name:'Flamme',  icon:'🔥', dmg:18, acc:.95, desc:'18·95%'},
+      {name:'Inferno', icon:'💥', dmg:38, acc:.60, desc:'38·60%'},
+      {name:'Brûlure', icon:'🌋', dmg:12, acc:1,   desc:'12·100%'},
+      {name:'Soin',    icon:'💚', dmg:0,  acc:1,   heal:20, desc:'+20 PV'},
     ]
   },
   Glacius: {
     name:'Glacius', icon:'🧊', colorHex:'#22aaff', color3D:0x22aaff,
     maxHP:110, speed:40,
     moves:[
-      {name:'Blizzard',   icon:'❄️',dmg:22,acc:.90,desc:'22·90%'},
-      {name:'Avalanche',  icon:'🌀',dmg:45,acc:.55,desc:'45·55%'},
-      {name:'Stalactite', icon:'🧊',dmg:14,acc:1,  desc:'14·100%'},
-      {name:'Soin',       icon:'💚',dmg:0, acc:1,  heal:25,desc:'+25 PV'},
+      {name:'Blizzard',   icon:'❄️', dmg:22, acc:.90, desc:'22·90%'},
+      {name:'Avalanche',  icon:'🌀', dmg:45, acc:.55, desc:'45·55%'},
+      {name:'Stalactite', icon:'🧊', dmg:14, acc:1,   desc:'14·100%'},
+      {name:'Soin',       icon:'💚', dmg:0,  acc:1,   heal:25, desc:'+25 PV'},
     ]
   }
 };
 
-/* Couleurs des slots (jusqu'à 4) */
 const SLOT_CLR    = ['#ff5522','#ff9900','#22aaff','#00ddaa'];
 const SLOT_CLR_3D = [0xff5522, 0xff9900, 0x22aaff, 0x00ddaa];
 
-/* Positions 3D selon nb de joueurs */
 const POS = {
   2: [[-2.2,0,0],[2.2,0,0]],
   3: [[-2.8,0,0],[0,0,-0.8],[2.8,0,0]],
   4: [[-3.0,0,0.6],[-1.0,0,-0.6],[1.0,0,-0.6],[3.0,0,0.6]]
 };
 
-/* État global partagé */
+/* ── État global partagé ── */
 const G = {
   myToken   : localStorage.getItem('ba_token') || null,
   myProfile : null,
@@ -59,10 +57,11 @@ const G = {
   mySlot    : 0,
   mode      : '1v1',
   teamHPMode: 'individual',
-  /* Lobby */
-  lobbyPlayers: [],   // [{slot,pseudo,avatar,ready}]
-  /* Combat */
-  players  : [],      // [{slot,pseudo,char,hp,maxHP,alive,team}]
-  choices  : {},      // {slot:{move,targetSlot}}
-  phase    : 'lobby', // lobby|charselect|fight|over
+  lobbyPlayers: [],   // [{slot, pseudo, avatar, ready}]
+  players  : [],      // [{slot, pseudo, char, hp, maxHP, alive, team}]
+  choices  : {},      // {slot: {move, targetSlot}}
+  phase    : 'idle',  // idle|waiting|lobby|charselect|fight|resolving|over
+  _hostPoll: null,
 };
+
+const delay = ms => new Promise(r => setTimeout(r, ms));

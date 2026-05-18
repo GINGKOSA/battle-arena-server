@@ -10,16 +10,18 @@
 <div id="app">
   <h1>⚔️ Battle Arena</h1>
 
-  <!-- LOGIN -->
+  <!-- ═══ LOGIN ═══ -->
   <div id="login-screen">
     <div class="login-title">Connexion</div>
     <div class="login-sub">Connecte-toi avec Discord pour voir tes amis, ou joue directement avec un code.</div>
+
     <button class="btn discord" onclick="login()">
       <svg width="20" height="20" viewBox="0 0 71 55" fill="white" style="vertical-align:middle;margin-right:8px">
         <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4a40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.4 0A39.5 39.5 0 0 0 25.5.4 58.4 58.4 0 0 0 10.8 5C1.6 18.8-1 32.2.3 45.4a58.9 58.9 0 0 0 18 9.1 42.2 42.2 0 0 0 3.6-5.9 38.4 38.4 0 0 1-6.1-2.9l1.5-1.1a41.9 41.9 0 0 0 36.2 0l1.5 1.1a38.2 38.2 0 0 1-6.1 2.9 42 42 0 0 0 3.6 5.9 58.7 58.7 0 0 0 18-9.1C72 30 68.1 16.7 60.1 4.9ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.5 0 6.4 3.2 6.4 7.2s-2.9 7.2-6.4 7.2Z"/>
       </svg>
       Se connecter avec Discord
     </button>
+
     <div style="font-size:12px;color:var(--muted)">ou sans compte</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
       <input id="room-input-anon" type="text" maxlength="4" placeholder="Code room"
@@ -30,7 +32,15 @@
     </div>
   </div>
 
-  <!-- LOBBY SCREEN -->
+  <!-- ═══ WAITING ROOM — indépendant, visible en anon ET Discord ═══ -->
+  <div id="waiting-room">
+    <div style="font-size:13px;color:var(--muted)">Code de la salle</div>
+    <div class="room-badge" id="room-code-display">????</div>
+    <div class="waiting"><span class="dot"></span><span id="wait-status">Connexion…</span></div>
+    <button class="btn small danger" onclick="cancelWait()">Annuler</button>
+  </div>
+
+  <!-- ═══ LOBBY SCREEN (Discord uniquement) ═══ -->
   <div id="lobby-screen">
 
     <div id="profile-bar">
@@ -73,16 +83,9 @@
       </div>
     </div>
 
-    <div id="waiting-room">
-      <div style="font-size:13px;color:var(--muted)">Code de la salle</div>
-      <div class="room-badge" id="room-code-display">????</div>
-      <div class="waiting"><span class="dot"></span><span id="wait-status">Connexion…</span></div>
-      <button class="btn small danger" onclick="cancelWait()">Annuler</button>
-    </div>
-
   </div>
 
-  <!-- GAME -->
+  <!-- ═══ GAME ═══ -->
   <div id="game">
 
     <!-- Lobby in-game -->
@@ -94,7 +97,6 @@
 
       <div id="lobby-player-list"></div>
 
-      <!-- Mode (hôte seulement) -->
       <div id="lobby-mode-section">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Mode de jeu</div>
         <div id="lobby-modes"></div>
@@ -134,7 +136,8 @@
         <div id="chat-panel">
           <div id="chat-header">
             <span>💬 Chat</span>
-            <button id="chat-close" onclick="toggleChat()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;display:none">✕</button>
+            <button id="chat-close" onclick="toggleChat()"
+              style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;display:none">✕</button>
           </div>
           <div id="chat-messages">
             <div class="chat-msg system">Que le combat commence !</div>
@@ -155,7 +158,7 @@
       <div id="action-panel">
         <div id="actions-grid" class="actions"></div>
         <div id="target-picker"></div>
-        <div id="waiting-action" style="display:none;text-align:center;padding:14px;font-size:13px;color:var(--muted)">
+        <div id="waiting-action">
           <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente des autres…
         </div>
       </div>
@@ -168,14 +171,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/config.js"></script>
+<script src="js/network.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/net.js"></script>
 <script src="js/ui.js"></script>
-<script src="js/lobby.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/combat.js"></script>
-<script>
-  initAuth();
-</script>
+<script>initAuth();</script>
 </body>
 </html>
