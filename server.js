@@ -7,10 +7,11 @@ const CLIENT_SECRET = process.env.DISCORD_SECRET;
 const REDIRECT_URI  = 'https://battle-arena-server-t781.onrender.com/callback';
 const FRONTEND      = 'https://gingkosa.github.io/battle-arena-server';
 
-const rooms   = {};
-const players = {};
-const tokens  = {};
+const rooms   = {};  // signaling WebRTC
+const players = {};  // joueurs connectés
+const tokens  = {};  // discordId → token
 
+/* ── Helpers ── */
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -71,6 +72,7 @@ function getPlayer(req) {
   return token ? players[token] : null;
 }
 
+/* ── Nettoyage ── */
 setInterval(() => {
   const now = Date.now();
   Object.keys(players).forEach(t => {
@@ -84,12 +86,14 @@ setInterval(() => {
   });
 }, 10000);
 
+/* ── Serveur ── */
 http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
   const path   = parsed.pathname;
 
   if (req.method === 'OPTIONS') { cors(res); res.end(); return; }
 
+  /* ── OAuth Discord ── */
   if (path === '/login') {
     const discordUrl = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
     res.writeHead(302, { Location: discordUrl });
@@ -99,52 +103,27 @@ http.createServer(async (req, res) => {
 
   if (path === '/callback') {
     const code = parsed.query.code;
-    if (!code) {
-      res.writeHead(302, { Location: FRONTEND + '/?error=no_code' });
-      res.end();
-      return;
-    }
+    if (!code) { res.writeHead(302, { Location: FRONTEND + '/?error=no_code' }); res.end(); return; }
     try {
       const body = new URLSearchParams({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: REDIRECT_URI
+        client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+        grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI
       }).toString();
-
       const tokenData = await httpsPost({
-        hostname: 'discord.com',
-        path: '/api/oauth2/token',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(body)
-        }
+        hostname: 'discord.com', path: '/api/oauth2/token', method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
       }, body);
-
       if (!tokenData.access_token) throw new Error('no token');
-
       const userData = await httpsGet({
-        hostname: 'discord.com',
-        path: '/api/users/@me',
+        hostname: 'discord.com', path: '/api/users/@me',
         headers: { Authorization: `Bearer ${tokenData.access_token}` }
       });
-
       const myToken = randToken();
       const avatar = userData.avatar
         ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
         : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || 0) % 5}.png`;
-
-      players[myToken] = {
-        id: userData.id,
-        username: userData.global_name || userData.username,
-        avatar,
-        lastSeen: Date.now(),
-        challenge: null
-      };
+      players[myToken] = { id: userData.id, username: userData.global_name || userData.username, avatar, lastSeen: Date.now(), challenge: null };
       tokens[userData.id] = myToken;
-
       res.writeHead(302, { Location: `${FRONTEND}/?token=${myToken}` });
       res.end();
     } catch(e) {
@@ -155,6 +134,7 @@ http.createServer(async (req, res) => {
     return;
   }
 
+  /* ── API joueur ── */
   if (path === '/me' && req.method === 'GET') {
     const p = getPlayer(req);
     if (!p) { json(res, { error: 'unauthorized' }, 401); return; }
@@ -180,21 +160,15 @@ http.createServer(async (req, res) => {
     const targetId = path.split('/')[2];
     const targetToken = tokens[targetId];
     if (!targetToken || !players[targetToken]) { json(res, { error: 'not_found' }, 404); return; }
-
     const target = players[targetToken];
-
-    // Défi mutuel : les deux se défient en même temps
-    // → le serveur crée directement la room, A est hôte, B est invité
+    // Défi mutuel
     if (target.challenge && target.challenge.fromId === me.id) {
       const room = randRoom();
-      // A (moi) = hôte
-      me.challenge = { accepted: true, room, isHost: true };
-      // B (target) = invité
+      me.challenge     = { accepted: true, room, isHost: true };
       target.challenge = { accepted: true, room, isHost: false };
       json(res, { ok: true, mutual: true });
       return;
     }
-
     target.challenge = { from: me.username, fromId: me.id, avatar: me.avatar };
     json(res, { ok: true });
     return;
@@ -211,19 +185,15 @@ http.createServer(async (req, res) => {
   if (path === '/accept' && req.method === 'POST') {
     const me = getPlayer(req);
     if (!me || !me.challenge) { json(res, { error: 'no_challenge' }, 400); return; }
-
-    // Si déjà résolu (défi mutuel côté serveur)
     if (me.challenge.accepted && me.challenge.room) {
       const result = { room: me.challenge.room, isHost: me.challenge.isHost };
       me.challenge = null;
       json(res, result);
       return;
     }
-
     const room = randRoom();
     const challengerToken = tokens[me.challenge.fromId];
     if (challengerToken && players[challengerToken]) {
-      // Challenger = hôte, accepteur = invité
       players[challengerToken].challenge = { accepted: true, room, isHost: true };
     }
     me.challenge = null;
@@ -245,20 +215,24 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  const room = path.slice(1).toUpperCase();
-  if (!room) { cors(res); res.end('Battle Arena Server OK'); return; }
+  /* ── Signaling WebRTC ── */
+  // Accepte : ABCD-OFFER-0, ABCD-ANSWER-0, etc.
+  const roomMatch = path.slice(1).toUpperCase();
+  if (!roomMatch || !/^[A-Z0-9-]+$/.test(roomMatch)) {
+    cors(res); res.end('Battle Arena Server OK'); return;
+  }
 
   if (req.method === 'POST') {
     const body = await getBody(req);
-    rooms[room] = { sdp: body, time: Date.now() };
+    rooms[roomMatch] = { sdp: body, time: Date.now() };
     cors(res); res.end('ok');
     return;
   }
 
   if (req.method === 'GET') {
-    const data = rooms[room];
+    const data = rooms[roomMatch];
     cors(res);
-    if (data) { delete rooms[room]; res.end(data.sdp); }
+    if (data) { delete rooms[roomMatch]; res.end(data.sdp); }
     else res.end('');
     return;
   }
