@@ -96,7 +96,7 @@
     <!-- Zone de combat -->
     <div id="battle-area" style="display:none;flex-direction:column;gap:12px;">
 
-      <div style="display:flex;gap:12px;align-items:stretch;">
+      <div id="battle-row" style="display:flex;gap:12px;align-items:stretch;position:relative;">
         <div id="canvas-container">
           <canvas id="battle-canvas"></canvas>
           <div id="overlay">
@@ -105,8 +105,14 @@
           </div>
         </div>
 
-        <div id="chat-panel" style="width:220px;flex-shrink:0;">
-          <div id="chat-header">💬 Chat</div>
+        <!-- Burger chat (mobile) — hors du canvas pour ne pas être coupé -->
+        <button id="chat-burger" onclick="toggleChat()" title="Chat">💬</button>
+
+        <div id="chat-panel">
+          <div id="chat-header" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>💬 Chat</span>
+            <button onclick="toggleChat()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;display:none;" id="chat-close">✕</button>
+          </div>
           <div id="chat-messages">
             <div class="chat-msg system">Connexion établie !</div>
           </div>

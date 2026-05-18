@@ -181,6 +181,13 @@ h1 {
 /* ── GAME ── */
 #game { display: none; flex-direction: column; gap: 12px; }
 
+#battle-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  position: relative;
+}
+
 #canvas-container {
   position: relative;
   border-radius: 12px;
@@ -192,6 +199,40 @@ h1 {
 }
 #battle-canvas { width: 100%; height: 100%; display: block; }
 
+/* ── CHAT BURGER BUTTON (mobile only) ── */
+#chat-burger {
+  display: none;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  width: 38px;
+  height: 38px;
+  background: rgba(19,19,42,0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s;
+}
+#chat-burger:hover { background: rgba(30,30,58,0.95); }
+
+/* ── CHAT PANEL ── */
+#chat-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 220px;
+  flex-shrink: 0;
+}
+
+/* ── OVERLAY ── */
 #overlay {
   position: absolute; inset: 0;
   display: none;
@@ -200,6 +241,7 @@ h1 {
   background: rgba(0,0,0,0.65);
   border-radius: 12px;
   gap: 16px;
+  z-index: 10;
 }
 #overlay-text {
   font-family: 'Orbitron', sans-serif;
@@ -208,6 +250,57 @@ h1 {
   text-align: center;
   line-height: 1.4;
   white-space: pre-line;
+}
+
+/* ── RESPONSIVE MOBILE ── */
+@media (max-width: 600px) {
+  body { padding: 8px; justify-content: flex-start; padding-top: 12px; }
+  #app { gap: 8px; }
+
+  #battle-row {
+    flex-direction: column;
+    position: relative;
+  }
+
+  #canvas-container {
+    width: 100%;
+    height: 240px;
+    flex: none;
+  }
+
+  #chat-burger {
+    display: flex !important;
+  }
+
+  /* Sur mobile, le chat est caché par défaut via JS (pas CSS) */
+  #chat-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: min(260px, 85vw);
+    height: 240px;
+    z-index: 25;
+    border-radius: 10px;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.7);
+    transform: translateX(110%);
+    transition: transform 0.25s ease;
+    /* On ne touche PAS display — on utilise transform */
+  }
+
+  #chat-panel.open {
+    transform: translateX(0);
+  }
+
+  .actions { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .action-btn { padding: 9px 8px; font-size: 12px; }
+  .action-btn .dmg { display: none; }
+  #combat-log-messages { height: 70px; }
+  #char-cards { flex-direction: column; }
+  .char-card { min-width: unset; width: 100%; flex-direction: row; gap: 12px; padding: 14px 16px; text-align: left; }
+  .char-card-icon { font-size: 32px; flex-shrink: 0; }
+  .char-card-name { font-size: 13px; }
+  .player-row { padding: 8px 12px; }
+  #manual-panel { padding: 12px; }
 }
 
 /* ── ACTION BUTTONS ── */
