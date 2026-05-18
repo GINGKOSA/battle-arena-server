@@ -292,22 +292,19 @@
       white-space: pre-line;
     }
 
-    .hud { display: flex; gap: 12px; align-items: stretch; }
-    .fighter-hud { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
-    .fighter-hud.enemy { text-align: right; }
-    .fighter-name { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fighter-hud:not(.enemy) .fighter-name { color: var(--fire); }
-    .fighter-hud.enemy .fighter-name { color: var(--ice); }
-    .hp-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-    .hp-bar-bg { height: 8px; border-radius: 99px; background: #1a1a3a; overflow: hidden; border: 1px solid var(--border); }
-    .hp-bar { height: 100%; border-radius: 99px; transition: width 0.5s ease, background 0.5s; }
-    .hp-bar.high { background: var(--hp-high); }
-    .hp-bar.mid  { background: var(--hp-mid); }
-    .hp-bar.low  { background: var(--hp-low); box-shadow: 0 0 6px var(--hp-low); }
-    .hp-val { font-size: 12px; color: var(--muted); margin-top: 5px; }
-    .vs-badge { align-self: center; font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; color: var(--muted); padding: 0 4px; }
-
     .log { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 14px; min-height: 56px; line-height: 1.6; }
+
+    #combat-log { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
+    #combat-log-header { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #combat-log-messages { height: 110px; overflow-y: auto; padding: 8px 14px; display: flex; flex-direction: column; gap: 4px; scroll-behavior: smooth; }
+    #combat-log-messages::-webkit-scrollbar { width: 4px; }
+    #combat-log-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    .log-entry { font-size: 13px; line-height: 1.5; display: flex; gap: 8px; align-items: baseline; }
+    .log-entry .log-badge { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 7px; border-radius: 99px; font-weight: 600; flex-shrink: 0; }
+    .log-entry.me .log-badge   { background: rgba(255,85,34,0.18); color: var(--fire); border: 1px solid rgba(255,85,34,0.3); }
+    .log-entry.them .log-badge { background: rgba(34,170,255,0.18); color: var(--ice); border: 1px solid rgba(34,170,255,0.3); }
+    .log-entry.system .log-badge { background: rgba(119,119,170,0.18); color: var(--muted); border: 1px solid rgba(119,119,170,0.3); }
+    .log-entry .log-text { color: var(--text); }
     .turn-badge { display: inline-block; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 10px; border-radius: 99px; margin-bottom: 4px; font-weight: 600; }
     .turn-badge.mine   { background: rgba(255,85,34,0.18); color: var(--fire); border: 1px solid rgba(255,85,34,0.4); }
     .turn-badge.theirs { background: rgba(34,170,255,0.18); color: var(--ice); border: 1px solid rgba(34,170,255,0.4); }
@@ -333,8 +330,8 @@
     .action-btn .dmg { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
 
     #chat-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
-    #chat-header { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-    #chat-messages { height: 130px; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
+    #chat-header { padding: 8px 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #chat-messages { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
     #chat-messages::-webkit-scrollbar { width: 4px; }
     #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
     .chat-msg { font-size: 13px; line-height: 1.5; display: flex; gap: 6px; align-items: baseline; }
@@ -431,33 +428,30 @@
 
   <!-- ── GAME ── -->
   <div id="game">
-    <div id="canvas-container">
-      <canvas id="battle-canvas"></canvas>
-      <div id="overlay">
-        <div id="overlay-text"></div>
-        <button class="btn" onclick="location.reload()">↺ Rejouer</button>
+    <div style="display:flex;gap:12px;align-items:stretch;">
+      <div id="canvas-container" style="flex:1;aspect-ratio:unset;height:340px;">
+        <canvas id="battle-canvas"></canvas>
+        <div id="overlay">
+          <div id="overlay-text"></div>
+          <button class="btn" onclick="askRematch()">↺ Rejouer</button>
+        </div>
+      </div>
+
+      <div id="chat-panel" style="width:220px;flex-shrink:0;">
+        <div id="chat-header">💬 Chat</div>
+        <div id="chat-messages">
+          <div class="chat-msg system">Connexion établie !</div>
+        </div>
+        <div id="chat-input-row">
+          <input id="chat-input" type="text" placeholder="Message…" maxlength="200" onkeydown="if(event.key==='Enter') sendChat()"/>
+          <button id="chat-send" onclick="sendChat()">➤</button>
+        </div>
       </div>
     </div>
 
-    <div class="hud">
-      <div class="fighter-hud">
-        <div class="fighter-name" id="my-name">⚔️ Toi</div>
-        <div class="hp-label">PV</div>
-        <div class="hp-bar-bg"><div class="hp-bar high" id="p-bar" style="width:100%"></div></div>
-        <div class="hp-val" id="p-val">100 / 100</div>
-      </div>
-      <div class="vs-badge">VS</div>
-      <div class="fighter-hud enemy">
-        <div class="fighter-name" id="their-name">Adversaire 🧊</div>
-        <div class="hp-label">PV</div>
-        <div class="hp-bar-bg"><div class="hp-bar high" id="e-bar" style="width:100%"></div></div>
-        <div class="hp-val" id="e-val">100 / 100</div>
-      </div>
-    </div>
-
-    <div class="log">
-      <span class="turn-badge mine" id="turn-badge">Ton tour</span><br>
-      <span id="log-text">Connexion établie — que le combat commence !</span>
+    <div id="combat-log">
+      <div id="combat-log-header">📜 Journal de combat</div>
+      <div id="combat-log-messages"></div>
     </div>
 
     <div id="action-panel">
@@ -467,16 +461,7 @@
       </div>
     </div>
 
-    <div id="chat-panel">
-      <div id="chat-header">💬 Chat</div>
-      <div id="chat-messages">
-        <div class="chat-msg system">Connexion établie — dites bonjour !</div>
-      </div>
-      <div id="chat-input-row">
-        <input id="chat-input" type="text" placeholder="Écris un message…" maxlength="200" onkeydown="if(event.key==='Enter') sendChat()"/>
-        <button id="chat-send" onclick="sendChat()">➤</button>
-      </div>
-    </div>
+
   </div>
 
   <footer>WebRTC P2P · Discord OAuth · Render · 100% HTML / JS / CSS</footer>
@@ -865,8 +850,6 @@ function onConnected() {
   const myName = myProfile ? myProfile.username : myChar.name;
   document.getElementById('my-name').textContent    = myChar.icon + ' ' + myName;
   document.getElementById('their-name').textContent = theirChar.icon + ' Adversaire';
-  document.getElementById('p-val').textContent = gs.myHP + ' / ' + gs.myMaxHP;
-  document.getElementById('e-val').textContent = gs.theirHP + ' / ' + gs.theirMaxHP;
 
   renderMoves();
   initThree();
@@ -894,6 +877,20 @@ function onMessage(msg) {
   if (msg.type === 'round_result') applyResult(msg);
   if (msg.type === 'chat')         addChatMsg(msg.text, false);
   if (msg.type === 'name')         document.getElementById('their-name').textContent = theirChar.icon + ' ' + msg.name;
+  if (msg.type === 'rematch_ask') {
+    if (rematchAsked) {
+      // Les deux ont demandé → on lance
+      send({ type: 'rematch_go' });
+      startRematch();
+    } else {
+      // L'adversaire demande, on affiche notif
+      document.querySelector('#overlay-text').textContent += '\n\nL\'adversaire veut rejouer !';
+      const btn = document.querySelector('#overlay .btn');
+      btn.textContent = '✅ Accepter la revanche';
+      btn.onclick = () => { send({ type: 'rematch_go' }); startRematch(); };
+    }
+  }
+  if (msg.type === 'rematch_go') startRematch();
 }
 
 /* ═══════════════ NOUVEAU SYSTÈME DE COMBAT ═══════════════ */
@@ -1002,10 +999,24 @@ async function applyMoveResult(move, hit, who) {
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function setLog(text, isEnemy) {
-  const b = document.getElementById('turn-badge');
-  b.className = 'turn-badge ' + (isEnemy ? 'theirs' : 'mine');
-  b.textContent = isEnemy ? "Adversaire" : 'Toi';
-  document.getElementById('log-text').textContent = text;
+  addLog(text, isEnemy ? 'them' : 'me');
+}
+
+function addLog(text, type = 'system') {
+  const box = document.getElementById('combat-log-messages');
+  if (!box) return;
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + type;
+  const badge = document.createElement('span');
+  badge.className = 'log-badge';
+  badge.textContent = type === 'me' ? 'Toi' : type === 'them' ? 'Ennemi' : '•';
+  const txt = document.createElement('span');
+  txt.className = 'log-text';
+  txt.textContent = text;
+  entry.appendChild(badge);
+  entry.appendChild(txt);
+  box.appendChild(entry);
+  box.scrollTop = box.scrollHeight;
 }
 
 function setBusy(b) {
@@ -1014,16 +1025,7 @@ function setBusy(b) {
 }
 
 function updateBars() {
-  const mp = Math.max(0, gs.myHP)    / gs.myMaxHP    * 100;
-  const tp = Math.max(0, gs.theirHP) / gs.theirMaxHP * 100;
-  const pBar = document.getElementById('p-bar');
-  const eBar = document.getElementById('e-bar');
-  pBar.style.width = mp + '%'; eBar.style.width = tp + '%';
-  pBar.className = 'hp-bar ' + (mp > 50 ? 'high' : mp > 25 ? 'mid' : 'low');
-  eBar.className = 'hp-bar ' + (tp > 50 ? 'high' : tp > 25 ? 'mid' : 'low');
-  document.getElementById('p-val').textContent = Math.max(0, gs.myHP)    + ' / ' + gs.myMaxHP;
-  document.getElementById('e-val').textContent = Math.max(0, gs.theirHP) + ' / ' + gs.theirMaxHP;
-  // Mise à jour des sprites 3D
+  // Mise à jour des sprites 3D uniquement
   updateHPSprite(playerHPSprite, gs.myHP);
   updateHPSprite(enemyHPSprite,  gs.theirHP);
 }
@@ -1044,6 +1046,63 @@ function checkOver() {
 function showOverlay(text) {
   document.getElementById('overlay').style.display = 'flex';
   document.getElementById('overlay-text').textContent = text;
+}
+
+/* ═══════════════ REMATCH ═══════════════ */
+let rematchAsked = false;
+
+function askRematch() {
+  if (rematchAsked) return;
+  rematchAsked = true;
+  document.querySelector('#overlay .btn').textContent = '⏳ En attente…';
+  document.querySelector('#overlay .btn').disabled = true;
+  send({ type: 'rematch_ask' });
+}
+
+function startRematch() {
+  rematchAsked = false;
+  document.getElementById('overlay').style.display = 'none';
+
+  // Reset état
+  gs.myHP      = myChar.maxHP;
+  gs.theirHP   = theirChar.maxHP;
+  gs.myMaxHP   = myChar.maxHP;
+  gs.theirMaxHP= theirChar.maxHP;
+  gs.myChoice  = null;
+  gs.theirChoice = null;
+  gs.busy = false;
+  gs.over = false;
+  gs.myAnim = null;
+  gs.theirAnim = null;
+
+  // Reset positions personnages
+  if (playerMesh) playerMesh.position.set(-2.2, 0, 0);
+  if (enemyMesh)  enemyMesh.position.set(2.2, 0, 0);
+
+  // Reset sprites HP
+  updateHPSprite(playerHPSprite, gs.myHP);
+  updateHPSprite(enemyHPSprite,  gs.theirHP);
+
+  updateBars();
+  renderMoves();
+  document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
+  document.getElementById('waiting-action').style.display = 'none';
+
+  // Reset bouton overlay pour la prochaine fois
+  const btn = document.querySelector('#overlay .btn');
+  btn.textContent = '↺ Rejouer';
+  btn.disabled = false;
+
+  // Vide le log et ajoute séparateur si revanche
+  const box = document.getElementById('combat-log-messages');
+  if (box && box.children.length > 0) {
+    const sep = document.createElement('div');
+    sep.className = 'log-entry system';
+    sep.innerHTML = '<span class="log-badge">•</span><span class="log-text" style="color:var(--muted)">── Nouvelle partie ──</span>';
+    box.appendChild(sep);
+  }
+
+  setLog('Nouvelle partie — choisis ton attaque !', false);
 }
 
 /* ═══════════════ CHAT ═══════════════ */
