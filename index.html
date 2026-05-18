@@ -890,9 +890,10 @@ function onDisconnected() {
 }
 
 function onMessage(msg) {
-  if (msg.type === 'choice') receiveTheirChoice(msg.move);
-  if (msg.type === 'chat')   addChatMsg(msg.text, false);
-  if (msg.type === 'name')   document.getElementById('their-name').textContent = theirChar.icon + ' ' + msg.name;
+  if (msg.type === 'choice')       receiveTheirChoice(msg.move);
+  if (msg.type === 'round_result') applyResult(msg);
+  if (msg.type === 'chat')         addChatMsg(msg.text, false);
+  if (msg.type === 'name')         document.getElementById('their-name').textContent = theirChar.icon + ' ' + msg.name;
 }
 
 /* ═══════════════ NOUVEAU SYSTÈME DE COMBAT ═══════════════ */
@@ -900,15 +901,12 @@ function chooseAction(move) {
   if (gs.myChoice || gs.busy || gs.over) return;
   gs.myChoice = move;
 
-  // Désactive les boutons, affiche attente
   document.querySelectorAll('.action-btn').forEach(b => b.disabled = true);
   document.getElementById('waiting-action').style.display = 'block';
   setLog(`Tu choisis ${move.icon} ${move.name} — en attente de l'adversaire…`, false);
 
-  // Envoie le choix
   send({ type: 'choice', move });
 
-  // Si l'adversaire avait déjà choisi, on résout
   if (gs.theirChoice) resolveRound();
 }
 
@@ -925,29 +923,39 @@ async function resolveRound() {
 
   const myMove    = gs.myChoice;
   const theirMove = gs.theirChoice;
-  gs.myChoice = null;
+  gs.myChoice    = null;
   gs.theirChoice = null;
 
-  const mySpeed    = myChar.speed;
-  const theirSpeed = theirChar.speed;
+  if (isHost) {
+    // L'hôte calcule les résultats aléatoires et les envoie
+    const myHit    = myMove.heal    ? true : Math.random() < myMove.acc;
+    const theirHit = theirMove.heal ? true : Math.random() < theirMove.acc;
+    const result = { type: 'round_result', myMove, theirMove, myHit, theirHit };
+    send(result);
+    await applyResult(result);
+  }
+  // L'invité attend le round_result via onMessage
+}
 
-  // Détermine l'ordre
-  const iGoFirst = mySpeed >= theirSpeed;
+async function applyResult(result) {
+  // Du point de vue de chaque joueur :
+  // "myMove" dans le message = le move de l'hôte
+  // On adapte selon qui on est
+  const hostMove  = result.myMove;
+  const guestMove = result.theirMove;
+  const hostHit   = result.myHit;
+  const guestHit  = result.theirHit;
 
-  if (iGoFirst) {
-    // Phase 1 : moi j'attaque
-    await applyMove(myMove, 'me', theirMove);
+  // Pyros (hôte) est plus rapide → frappe en premier
+  const pyrosGoesFirst = true; // toujours vrai : Pyros vitesse 80 > Glacius 40
+
+  if (pyrosGoesFirst) {
+    // Phase 1 : Pyros attaque, Glacius défend
+    await applyMoveResult(hostMove, hostHit, isHost ? 'me' : 'them');
     if (gs.over) return;
-    await delay(600);
-    // Phase 2 : eux ripostent
-    await applyMove(theirMove, 'them', myMove);
-  } else {
-    // Phase 1 : eux attaquent
-    await applyMove(theirMove, 'them', myMove);
-    if (gs.over) return;
-    await delay(600);
-    // Phase 2 : moi je riposte
-    await applyMove(myMove, 'me', theirMove);
+    await delay(700);
+    // Phase 2 : Glacius riposte, Pyros défend
+    await applyMoveResult(guestMove, guestHit, isHost ? 'them' : 'me');
   }
 
   if (!gs.over) {
@@ -958,35 +966,32 @@ async function resolveRound() {
   }
 }
 
-async function applyMove(move, who, opponentMove) {
+async function applyMoveResult(move, hit, who) {
   const isMe = who === 'me';
-  const hit = Math.random() < move.acc;
 
   if (move.heal) {
+    const healAmt = move.heal;
     if (isMe) {
-      gs.myHP = Math.min(gs.myMaxHP, gs.myHP + move.heal);
-      setLog(`Tu utilises ${move.icon} ${move.name} et récupères ${move.heal} PV !`, false);
+      gs.myHP = Math.min(gs.myMaxHP, gs.myHP + healAmt);
+      setLog(`Tu utilises ${move.icon} ${move.name} et récupères ${healAmt} PV !`, false);
     } else {
-      gs.theirHP = Math.min(gs.theirMaxHP, gs.theirHP + move.heal);
-      setLog(`L'adversaire utilise ${move.icon} ${move.name} et récupère ${move.heal} PV !`, true);
+      gs.theirHP = Math.min(gs.theirMaxHP, gs.theirHP + healAmt);
+      setLog(`L'adversaire utilise ${move.icon} ${move.name} et récupère ${healAmt} PV !`, true);
     }
   } else if (hit) {
-    const dmg = move.dmg;
     if (isMe) {
-      gs.theirHP -= dmg;
+      gs.theirHP -= move.dmg;
       gs.myAnim = { t: 0 };
       setTimeout(() => spawnHitParticles('their'), 300);
-      setLog(`Tu utilises ${move.icon} ${move.name} et infliges ${dmg} dégâts !`, false);
+      setLog(`Tu utilises ${move.icon} ${move.name} et infliges ${move.dmg} dégâts !`, false);
     } else {
-      gs.myHP -= dmg;
+      gs.myHP -= move.dmg;
       gs.theirAnim = { t: 0 };
       setTimeout(() => spawnHitParticles('mine'), 300);
-      setLog(`L'adversaire utilise ${move.icon} ${move.name} et t'inflige ${dmg} dégâts !`, true);
+      setLog(`L'adversaire utilise ${move.icon} ${move.name} et t'inflige ${move.dmg} dégâts !`, true);
     }
   } else {
-    const name = isMe ? 'Tu utilises' : "L'adversaire utilise";
-    const rate = isMe ? 'rates' : 'rate';
-    setLog(`${name} ${move.icon} ${move.name}… mais ${rate} !`, !isMe);
+    setLog(`${isMe ? 'Tu utilises' : "L'adversaire utilise"} ${move.icon} ${move.name}… mais ${isMe ? 'rates' : 'rate'} !`, !isMe);
   }
 
   updateBars();
