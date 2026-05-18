@@ -6,6 +6,10 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' }
 ];
 
+// Pseudos des joueurs (définis à la connexion)
+let myPseudo    = null;
+let theirPseudo = null;
+
 const CHARS = {
   Pyros: {
     name: 'Pyros', icon: '⚔️',

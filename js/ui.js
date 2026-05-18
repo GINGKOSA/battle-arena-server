@@ -97,6 +97,32 @@ function selectChar(charName) {
   if (theirCharChoice) startBattle();
 }
 
+/* ── Chat burger (mobile) ── */
+function toggleChat() {
+  const panel = document.getElementById('chat-panel');
+  const closeBtn = document.getElementById('chat-close');
+  const isMobile = window.innerWidth <= 600;
+  if (!isMobile) return;
+
+  panel.classList.toggle('open');
+  closeBtn.style.display = panel.classList.contains('open') ? 'block' : 'none';
+  if (panel.classList.contains('open')) {
+    document.getElementById('chat-messages').scrollTop = 999999;
+  }
+}
+
+// Ferme le chat si on clique en dehors (mobile)
+document.addEventListener('click', e => {
+  if (window.innerWidth > 600) return;
+  const panel  = document.getElementById('chat-panel');
+  const burger = document.getElementById('chat-burger');
+  if (!panel || !burger) return;
+  if (panel.classList.contains('open') && !panel.contains(e.target) && !burger.contains(e.target)) {
+    panel.classList.remove('open');
+    document.getElementById('chat-close').style.display = 'none';
+  }
+});
+
 /* ── Chat ── */
 function sendChat() {
   const input = document.getElementById('chat-input');
@@ -119,8 +145,8 @@ function addChatMsg(text, isMe) {
     const who = document.createElement('span');
     who.className = 'who';
     who.textContent = isMe
-      ? (myProfile ? myProfile.username : (myChar ? myChar.name : 'Moi'))
-      : (theirChar ? theirChar.name : 'Adversaire');
+      ? (myPseudo || 'Moi')
+      : (theirPseudo || 'Adversaire');
     const txt = document.createElement('span');
     txt.className = 'txt';
     txt.textContent = text;

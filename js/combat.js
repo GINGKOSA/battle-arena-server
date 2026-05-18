@@ -27,6 +27,12 @@ function onDisconnected() {
 }
 
 function onMessage(msg) {
+  if (msg.type === 'pseudo') {
+    theirPseudo = msg.name;
+    updateTheirSprite();
+    // Renvoie le nôtre au cas où il n'a pas été reçu
+    send({ type: 'pseudo', name: myPseudo || 'Joueur' });
+  }
   if (msg.type === 'char_choice')  receiveTheirChar(msg.char);
   if (msg.type === 'choice')       receiveTheirChoice(msg.move);
   if (msg.type === 'round_result') applyResult(msg);
@@ -74,6 +80,10 @@ function receiveTheirChar(charName) {
 function startBattle() {
   myChar    = CHARS[myCharChoice];
   theirChar = CHARS[theirCharChoice];
+
+  // Pseudos finaux (fallback sur nom du perso)
+  if (!myPseudo)    myPseudo    = myChar.name;
+  if (!theirPseudo) theirPseudo = theirChar.name;
 
   document.getElementById('char-select').style.display  = 'none';
   document.getElementById('battle-area').style.display  = 'flex';
@@ -171,30 +181,33 @@ async function applyResult(result) {
 
 async function applyMoveResult(move, hit, who) {
   const isMe = who === 'me';
+  const myName    = myPseudo    || myChar.name;
+  const theirName = theirPseudo || theirChar.name;
 
   if (move.heal) {
     const gain = move.heal;
     if (isMe) {
       gs.myHP = Math.min(gs.myMaxHP, gs.myHP + gain);
-      setLog(`Tu utilises ${move.icon} ${move.name} et récupères ${gain} PV !`, false);
+      setLog(`${myName} utilise ${move.icon} ${move.name} et récupère ${gain} PV !`, false);
     } else {
       gs.theirHP = Math.min(gs.theirMaxHP, gs.theirHP + gain);
-      setLog(`L'adversaire utilise ${move.icon} ${move.name} et récupère ${gain} PV !`, true);
+      setLog(`${theirName} utilise ${move.icon} ${move.name} et récupère ${gain} PV !`, true);
     }
   } else if (hit) {
     if (isMe) {
       gs.theirHP -= move.dmg;
       gs.myAnim = { t: 0 };
       setTimeout(() => spawnHitParticles('their'), 300);
-      setLog(`Tu utilises ${move.icon} ${move.name} et infliges ${move.dmg} dégâts !`, false);
+      setLog(`${myName} utilise ${move.icon} ${move.name} et inflige ${move.dmg} dégâts !`, false);
     } else {
       gs.myHP -= move.dmg;
       gs.theirAnim = { t: 0 };
       setTimeout(() => spawnHitParticles('mine'), 300);
-      setLog(`L'adversaire utilise ${move.icon} ${move.name} et t'inflige ${move.dmg} dégâts !`, true);
+      setLog(`${theirName} utilise ${move.icon} ${move.name} et inflige ${move.dmg} dégâts !`, true);
     }
   } else {
-    setLog(`${isMe ? 'Tu utilises' : "L'adversaire utilise"} ${move.icon} ${move.name}… mais ${isMe ? 'rates' : 'rate'} !`, !isMe);
+    const name = isMe ? myName : theirName;
+    setLog(`${name} utilise ${move.icon} ${move.name}… mais rate !`, !isMe);
   }
 
   updateHPSprites();

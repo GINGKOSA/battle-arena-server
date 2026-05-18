@@ -53,6 +53,7 @@ async function initAuth() {
     }
     document.getElementById('profile-avatar').src = myProfile.avatar;
     document.getElementById('profile-name').textContent = myProfile.username;
+    myPseudo = myProfile.username;
     showScreen('lobby');
     startPolls();
   } catch {

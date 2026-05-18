@@ -125,9 +125,8 @@ function initThree() {
 }
 
 function buildChars() {
-  // Supprime les anciens meshes si existants
-  if (playerMesh) { s3.remove(playerMesh); }
-  if (enemyMesh)  { s3.remove(enemyMesh); }
+  if (playerMesh)     { s3.remove(playerMesh); }
+  if (enemyMesh)      { s3.remove(enemyMesh); }
   if (playerHPSprite) { s3.remove(playerHPSprite); }
   if (enemyHPSprite)  { s3.remove(enemyHPSprite); }
 
@@ -139,14 +138,24 @@ function buildChars() {
   enemyMesh.position.set(2.2, 0, 0); enemyMesh.rotation.y = Math.PI - 0.3;
   s3.add(enemyMesh);
 
-  const myName = myProfile ? myProfile.username : myChar.name;
-  playerHPSprite = makeHPSprite(myName, gs.myHP, gs.myMaxHP, myChar.colorHex);
+  // Utilise le pseudo du joueur, pas le nom du perso
+  const myLabel    = myPseudo    || myChar.name;
+  const theirLabel = theirPseudo || theirChar.name;
+
+  playerHPSprite = makeHPSprite(myLabel, gs.myHP, gs.myMaxHP, myChar.colorHex);
   playerHPSprite.position.set(-2.2, 3.0, 0);
   s3.add(playerHPSprite);
 
-  enemyHPSprite = makeHPSprite(theirChar.name, gs.theirHP, gs.theirMaxHP, theirChar.colorHex);
+  enemyHPSprite = makeHPSprite(theirLabel, gs.theirHP, gs.theirMaxHP, theirChar.colorHex);
   enemyHPSprite.position.set(2.2, 3.0, 0);
   s3.add(enemyHPSprite);
+}
+
+// Met à jour le sprite de l'adversaire si son pseudo arrive après
+function updateTheirSprite() {
+  if (!enemyHPSprite) return;
+  enemyHPSprite._name = theirPseudo;
+  updateHPSprite(enemyHPSprite, gs.theirHP);
 }
 
 function resetThreeChars() {

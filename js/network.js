@@ -46,7 +46,11 @@ function send(obj) {
 }
 
 function setupDC(ch) {
-  ch.onopen    = () => onConnected();
+  ch.onopen    = () => {
+    onConnected();
+    // Envoie le pseudo dès que le canal est ouvert
+    setTimeout(() => send({ type: 'pseudo', name: myPseudo || 'Joueur' }), 100);
+  };
   ch.onmessage = e  => onMessage(JSON.parse(e.data));
   ch.onerror   = e  => console.error('DC error', e);
 }
@@ -58,12 +62,22 @@ function randRoom() {
 }
 
 async function createRoom() {
+  if (!myPseudo) {
+    const p = promptPseudo();
+    if (!p) return;
+    myPseudo = p;
+  }
   roomId = randRoom();
   isHost = true;
   await startHost(roomId);
 }
 
 async function joinRoom() {
+  if (!myPseudo) {
+    const p = promptPseudo();
+    if (!p) return;
+    myPseudo = p;
+  }
   const code = document.getElementById('room-input').value.trim().toUpperCase();
   if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
   roomId = code;
@@ -78,6 +92,9 @@ async function joinRoomAuto(code) {
 }
 
 async function createAnon() {
+  const pseudo = promptPseudo();
+  if (!pseudo) return;
+  myPseudo = pseudo;
   roomId = randRoom();
   isHost = true;
   showScreen('lobby');
@@ -88,6 +105,9 @@ async function createAnon() {
 }
 
 async function joinAnon() {
+  const pseudo = promptPseudo();
+  if (!pseudo) return;
+  myPseudo = pseudo;
   const code = document.getElementById('room-input-anon').value.trim().toUpperCase();
   if (code.length !== 4) { alert('Entre un code de 4 lettres !'); return; }
   roomId = code;
@@ -97,6 +117,12 @@ async function joinAnon() {
   document.getElementById('players-panel').style.display  = 'none';
   document.getElementById('manual-panel').style.display   = 'none';
   await startGuest(roomId);
+}
+
+function promptPseudo() {
+  const p = prompt('Entre ton pseudo :');
+  if (!p || !p.trim()) return null;
+  return p.trim().slice(0, 20);
 }
 
 function cancelWait() {
