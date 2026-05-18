@@ -1,356 +1,226 @@
-/* ═══════════════ COMBAT MULTI-JOUEURS ═══════════════ */
-
-/* ── État global ── */
-const players = [];   // [{ slot, pseudo, char, hp, maxHP, alive, team }]
+/* ═══════════════ GAME STATE ═══════════════ */
 let myChar    = null;
+let theirChar = null;
+let myCharChoice    = null;
+let theirCharChoice = null;
 let rematchAsked = false;
 
 const gs = {
-  phase: 'select',   // 'select' | 'resolve' | 'over'
-  choices: {},       // { slot: { move, targetSlot } }
-  charChoices: {},   // { slot: charName }
-  pseudos: {},       // { slot: pseudo }
+  myHP: 0, theirHP: 0,
+  myMaxHP: 0, theirMaxHP: 0,
+  myChoice: null, theirChoice: null,
+  busy: false, over: false,
   myAnim: null, theirAnim: null
 };
 
-/* ── Connexion ── */
-function onConnected() {}  // géré par network.js (onAllConnected)
+/* ── Connexion établie ── */
+function onConnected() {
+  if (document.getElementById('game').style.display === 'flex') return;
+  stopPolls();
+  document.getElementById('waiting-room').style.display = 'none';
+  showScreen('game');
+  showCharSelect();
+}
 
 function onDisconnected() {
-  if (gs.phase !== 'over') addLog('⚠️ Connexion perdue.', 'system');
+  if (!gs.over) addLog('⚠️ Connexion perdue avec l\'adversaire.', 'system');
 }
 
 function onMessage(msg) {
-  switch (msg.type) {
-    case 'room_info':    handleRoomInfo(msg);        break;
-    case 'pseudo':       handlePseudo(msg);           break;
-    case 'char_choice':  handleCharChoice(msg);       break;
-    case 'action':       handleAction(msg);           break;
-    case 'chat':         addChatMsg(msg.text, false, msg._from); break;
-    case 'rematch_ask':  handleRematchAsk(msg);       break;
-    case 'rematch_go':   startRematch();              break;
+  if (msg.type === 'pseudo') {
+    theirPseudo = msg.name;
+    updateTheirSprite();
+    // Renvoie le nôtre au cas où il n'a pas été reçu
+    send({ type: 'pseudo', name: myPseudo || 'Joueur' });
   }
+  if (msg.type === 'char_choice')  receiveTheirChar(msg.char);
+  if (msg.type === 'choice')       receiveTheirChoice(msg.move);
+  if (msg.type === 'round_result') applyResult(msg);
+  if (msg.type === 'chat')         addChatMsg(msg.text, false);
+  if (msg.type === 'rematch_ask') {
+    if (rematchAsked) {
+      send({ type: 'rematch_go' });
+      startRematch();
+    } else {
+      document.querySelector('#overlay-text').textContent += '\n\nL\'adversaire veut rejouer !';
+      const btn = document.querySelector('#overlay .btn');
+      btn.textContent = '✅ Accepter la revanche';
+      btn.disabled = false;
+      btn.onclick = () => {
+        rematchAsked = true;
+        send({ type: 'rematch_go' });
+        startRematch();
+      };
+    }
+  }
+  if (msg.type === 'rematch_go') startRematch();
 }
 
-function handleRoomInfo(msg) {
-  currentMode  = msg.mode;
-  teamHPMode   = msg.teamHPMode || 'individual';
-  numPlayers   = msg.numPlayers;
-}
-
-function handlePseudo(msg) {
-  gs.pseudos[msg.slot] = msg.name;
-  // Renvoie le nôtre
-  send({ type: 'pseudo', name: myPseudo || 'Joueur', slot: mySlot });
-  updateAllSprites();
+/* ── Init état ── */
+function initGameState() {
+  gs.myHP       = myChar.maxHP;
+  gs.theirHP    = theirChar.maxHP;
+  gs.myMaxHP    = myChar.maxHP;
+  gs.theirMaxHP = theirChar.maxHP;
+  gs.myChoice   = null;
+  gs.theirChoice= null;
+  gs.busy  = false;
+  gs.over  = false;
+  gs.myAnim    = null;
+  gs.theirAnim = null;
 }
 
 /* ── Char select ── */
-function handleCharChoice(msg) {
-  gs.charChoices[msg.slot] = msg.charName;
-  const ready = Object.keys(gs.charChoices).length >= numPlayers;
-  if (ready && (isHost || Object.keys(gs.charChoices).length === numPlayers)) {
-    startBattle();
-  } else {
-    const n = Object.keys(gs.charChoices).length;
-    document.getElementById('char-select-status').textContent =
-      `${n}/${numPlayers} joueurs prêts…`;
-  }
+function receiveTheirChar(charName) {
+  theirCharChoice = charName;
+  if (myCharChoice) startBattle();
+  else addLog('L\'adversaire a choisi son personnage — à toi !', 'system');
 }
 
-function selectChar(charName) {
-  gs.charChoices[mySlot] = charName;
-  document.querySelectorAll('.char-card').forEach(c => {
-    c.style.borderColor = c.dataset.char === charName ? CHARS[charName].colorHex : 'var(--border)';
-  });
-  document.getElementById('char-select-status').textContent =
-    `Tu as choisi ${CHARS[charName].icon} ${charName} — en attente des autres…`;
-
-  // Broadcast à tous
-  const msg = { type: 'char_choice', slot: mySlot, charName };
-  if (isHost) broadcast(msg);
-  else        sendTo(0, msg);
-
-  const ready = Object.keys(gs.charChoices).length >= numPlayers;
-  if (ready) startBattle();
-}
-
-/* ── Init bataille ── */
 function startBattle() {
-  document.getElementById('char-select').style.display = 'none';
-  document.getElementById('battle-area').style.display = 'flex';
-  gs.phase   = 'select';
-  gs.choices = {};
+  myChar    = CHARS[myCharChoice];
+  theirChar = CHARS[theirCharChoice];
 
-  // Construit la liste des joueurs
-  players.length = 0;
-  const n = numPlayers;
-  for (let i = 0; i < n; i++) {
-    const charName = gs.charChoices[i] || 'Pyros';
-    const char     = CHARS[charName];
-    let team = null;
-    if (currentMode === '2v2') team = i < 2 ? 0 : 1;
-    players.push({
-      slot: i,
-      pseudo: gs.pseudos[i] || `Joueur ${i+1}`,
-      char, hp: char.maxHP, maxHP: char.maxHP,
-      alive: true, team
-    });
-    if (i === mySlot) myChar = char;
-  }
+  // Pseudos finaux (fallback sur nom du perso)
+  if (!myPseudo)    myPseudo    = myChar.name;
+  if (!theirPseudo) theirPseudo = theirChar.name;
 
-  // PV partagés en 2v2
-  if (currentMode === '2v2' && teamHPMode === 'shared') {
-    const teamHP = [0, 1].map(t => {
-      const members = players.filter(p => p.team === t);
-      return members.reduce((s, p) => s + p.maxHP, 0) / members.length;
-    });
-    players.forEach(p => { p.maxHP = teamHP[p.team]; p.hp = teamHP[p.team]; });
-  }
+  document.getElementById('char-select').style.display  = 'none';
+  document.getElementById('battle-area').style.display  = 'flex';
 
+  initGameState();
   if (!r3) initThree();
   else     resetThreeChars();
 
-  renderActionPanel();
-  addLog('Que le combat commence !', 'system');
+  renderMoves();
+  document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
+  document.getElementById('waiting-action').style.display = 'none';
+  setLog('Que le combat commence !', false);
 }
 
-/* ── Panneau d'actions ── */
-function renderActionPanel() {
-  if (!myChar) return;
+/* ── Actions ── */
+function renderMoves() {
   const grid = document.getElementById('actions-grid');
   grid.innerHTML = '';
-
-  // Boutons d'attaque
   myChar.moves.forEach(m => {
     const btn = document.createElement('button');
     btn.className = 'action-btn';
     btn.innerHTML = `${m.icon} ${m.name} <span class="dmg">${m.desc}</span>`;
-    btn.onclick = () => openTargetPicker(m);
+    btn.onclick = () => chooseAction(m);
     grid.appendChild(btn);
   });
-
-  document.getElementById('waiting-action').style.display = 'none';
-  document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
 }
 
-/* ── Choix de cible (FFA & 2v2) ── */
-function openTargetPicker(move) {
-  if (gs.choices[mySlot] || gs.phase !== 'select') return;
-
-  // En 1v1 pas besoin de picker
-  if (currentMode === '1v1') {
-    const targetSlot = players.find(p => p.slot !== mySlot && p.alive)?.slot ?? -1;
-    submitAction(move, targetSlot);
-    return;
-  }
-
-  // Affiche le picker de cible
-  const picker = document.getElementById('target-picker');
-  picker.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em">Choisir une cible</div>';
-
-  const enemies = players.filter(p => {
-    if (!p.alive || p.slot === mySlot) return false;
-    if (currentMode === '2v2') {
-      const me = players[mySlot];
-      return p.team !== me.team;
-    }
-    return true;
-  });
-
-  if (move.heal) {
-    // Soin : cible un allié (ou soi-même)
-    const allies = players.filter(p => {
-      if (!p.alive) return false;
-      if (currentMode === '2v2') return p.team === players[mySlot].team;
-      return p.slot === mySlot;
-    });
-    allies.forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = 'action-btn';
-      btn.style.borderColor = SLOT_COLORS[p.slot];
-      btn.innerHTML = `${p.pseudo} <span style="font-size:11px;color:var(--muted)">${p.hp}/${p.maxHP} PV</span>`;
-      btn.onclick = () => { closePicker(); submitAction(move, p.slot); };
-      picker.appendChild(btn);
-    });
-  } else {
-    enemies.forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = 'action-btn';
-      btn.style.borderColor = SLOT_COLORS[p.slot];
-      btn.innerHTML = `${p.pseudo} <span style="font-size:11px;color:var(--muted)">${p.hp}/${p.maxHP} PV</span>`;
-      btn.onclick = () => { closePicker(); submitAction(move, p.slot); };
-      picker.appendChild(btn);
-    });
-  }
-
-  picker.style.display = 'flex';
-}
-
-function closePicker() {
-  document.getElementById('target-picker').style.display = 'none';
-}
-
-function submitAction(move, targetSlot) {
-  if (gs.choices[mySlot]) return;
-  gs.choices[mySlot] = { move, targetSlot };
-
+function chooseAction(move) {
+  if (gs.myChoice || gs.busy || gs.over) return;
+  gs.myChoice = move;
   document.querySelectorAll('.action-btn').forEach(b => b.disabled = true);
   document.getElementById('waiting-action').style.display = 'block';
-  addLog(`Tu choisis ${move.icon} ${move.name}…`, 'me');
-
-  const msg = { type: 'action', slot: mySlot, move, targetSlot };
-  if (isHost) {
-    broadcast(msg);
-    checkAllChosen();
-  } else {
-    sendTo(0, msg);
-  }
+  setLog(`Tu choisis ${move.icon} ${move.name} — en attente de l'adversaire…`, false);
+  send({ type: 'choice', move });
+  if (gs.theirChoice) resolveRound();
 }
 
-function handleAction(msg) {
-  gs.choices[msg.slot] = { move: msg.move, targetSlot: msg.targetSlot };
-  if (isHost) checkAllChosen();
+function receiveTheirChoice(move) {
+  gs.theirChoice = move;
+  if (gs.myChoice) resolveRound();
+  else setLog('L\'adversaire a choisi — à toi !', true);
 }
 
-function checkAllChosen() {
-  if (!isHost) return;
-  const alive = players.filter(p => p.alive).length;
-  if (Object.keys(gs.choices).length < alive) return;
-  resolveRound();
-}
-
-/* ── Résolution du round ── */
+/* ── Round ── */
 async function resolveRound() {
-  if (!isHost || gs.phase === 'resolve') return;
-  gs.phase = 'resolve';
-
-  // Calcule les hits aléatoires
-  const results = {};
-  Object.entries(gs.choices).forEach(([slot, choice]) => {
-    const hit = choice.move.heal ? true : Math.random() < choice.move.acc;
-    results[slot] = { ...choice, hit };
-  });
-
-  // Broadcast le résultat à tous
-  const roundMsg = { type: 'round_result', results };
-  broadcast(roundMsg);
-  await applyRound(results);
-}
-
-// Reçoit le résultat de l'hôte (guests)
-function handleRoundResult(msg) {
-  applyRound(msg.results);
-}
-
-async function applyRound(results) {
-  gs.phase = 'resolve';
+  if (gs.busy || gs.over) return;
+  gs.busy = true;
   document.getElementById('waiting-action').style.display = 'none';
 
-  // Trier par vitesse décroissante
-  const order = Object.entries(results)
-    .map(([slot, r]) => ({ slot: parseInt(slot), ...r }))
-    .sort((a, b) => {
-      const sa = players[a.slot]?.char.speed || 0;
-      const sb = players[b.slot]?.char.speed || 0;
-      return sb - sa;
-    });
+  const myMove    = gs.myChoice;
+  const theirMove = gs.theirChoice;
+  gs.myChoice    = null;
+  gs.theirChoice = null;
 
-  for (const action of order) {
-    const attacker = players[action.slot];
-    const target   = players[action.targetSlot];
-    if (!attacker || !attacker.alive) continue;
-
-    await applyAction(attacker, target, action.move, action.hit);
-    await delay(500);
-
-    if (checkGameOver()) return;
+  if (isHost) {
+    const myHit    = myMove.heal    ? true : Math.random() < myMove.acc;
+    const theirHit = theirMove.heal ? true : Math.random() < theirMove.acc;
+    const result = { type: 'round_result', myMove, theirMove, myHit, theirHit };
+    send(result);
+    await applyResult(result);
   }
-
-  // Round terminé
-  gs.choices = {};
-  gs.phase   = 'select';
-  renderActionPanel();
-  addLog('— Nouveau round —', 'system');
 }
 
-async function applyAction(attacker, target, move, hit) {
-  if (!target) return;
-  const isMe       = attacker.slot === mySlot;
-  const targetIsMe = target.slot === mySlot;
-  const aName = attacker.pseudo;
-  const tName = target.pseudo;
+async function applyResult(result) {
+  const hostMove  = result.myMove;
+  const guestMove = result.theirMove;
+  const hostHit   = result.myHit;
+  const guestHit  = result.theirHit;
 
-  if (move.heal) {
-    const gain = Math.min(move.heal, target.maxHP - target.hp);
-    target.hp = Math.min(target.maxHP, target.hp + gain);
-    addLog(`${aName} soigne ${tName} de ${gain} PV !`, isMe ? 'me' : 'them');
-    if (targetIsMe) gs.myAnim = { t: 0 };
-  } else if (hit) {
-    target.hp = Math.max(0, target.hp - move.dmg);
-    addLog(`${aName} utilise ${move.icon} ${move.name} sur ${tName} — ${move.dmg} dégâts !`, isMe ? 'me' : 'them');
-    if (isMe) {
-      spawnHitParticles(target.slot);
-    } else if (targetIsMe) {
-      gs.theirAnim = { t: 0, slot: attacker.slot };
-      spawnHitParticles(mySlot);
-    }
+  // Pyros (hôte vitesse 80) toujours plus rapide que Glacius (40)
+  // Mais si même perso, l'hôte frappe en premier
+  const hostChar  = isHost ? myChar    : theirChar;
+  const guestChar = isHost ? theirChar : myChar;
+  const hostFaster = hostChar.speed >= guestChar.speed;
+
+  if (hostFaster) {
+    await applyMoveResult(hostMove,  hostHit,  isHost ? 'me' : 'them');
+    if (gs.over) return;
+    await delay(700);
+    await applyMoveResult(guestMove, guestHit, isHost ? 'them' : 'me');
   } else {
-    addLog(`${aName} utilise ${move.icon} ${move.name}… mais rate !`, isMe ? 'me' : 'them');
+    await applyMoveResult(guestMove, guestHit, isHost ? 'them' : 'me');
+    if (gs.over) return;
+    await delay(700);
+    await applyMoveResult(hostMove,  hostHit,  isHost ? 'me' : 'them');
   }
 
-  if (target.hp <= 0) target.alive = false;
-  updateAllSprites();
+  if (!gs.over) {
+    gs.busy = false;
+    renderMoves();
+    document.querySelectorAll('.action-btn').forEach(b => b.disabled = false);
+    setLog('Choisis ton attaque !', false);
+  }
+}
+
+async function applyMoveResult(move, hit, who) {
+  const isMe = who === 'me';
+  const myName    = myPseudo    || myChar.name;
+  const theirName = theirPseudo || theirChar.name;
+
+  if (move.heal) {
+    const gain = move.heal;
+    if (isMe) {
+      gs.myHP = Math.min(gs.myMaxHP, gs.myHP + gain);
+      setLog(`${myName} utilise ${move.icon} ${move.name} et récupère ${gain} PV !`, false);
+    } else {
+      gs.theirHP = Math.min(gs.theirMaxHP, gs.theirHP + gain);
+      setLog(`${theirName} utilise ${move.icon} ${move.name} et récupère ${gain} PV !`, true);
+    }
+  } else if (hit) {
+    if (isMe) {
+      gs.theirHP -= move.dmg;
+      gs.myAnim = { t: 0 };
+      setTimeout(() => spawnHitParticles('their'), 300);
+      setLog(`${myName} utilise ${move.icon} ${move.name} et inflige ${move.dmg} dégâts !`, false);
+    } else {
+      gs.myHP -= move.dmg;
+      gs.theirAnim = { t: 0 };
+      setTimeout(() => spawnHitParticles('mine'), 300);
+      setLog(`${theirName} utilise ${move.icon} ${move.name} et inflige ${move.dmg} dégâts !`, true);
+    }
+  } else {
+    const name = isMe ? myName : theirName;
+    setLog(`${name} utilise ${move.icon} ${move.name}… mais rate !`, !isMe);
+  }
+
+  updateHPSprites();
+  await delay(400);
+  checkOver();
 }
 
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-/* ── Fin de partie ── */
-function checkGameOver() {
-  if (currentMode === '1v1') {
-    const alive = players.filter(p => p.alive);
-    if (alive.length <= 1) {
-      const winner = alive[0];
-      const iWon = winner && winner.slot === mySlot;
-      showOverlay(iWon ? '🏆 Victoire !\nTu as gagné !' : '💀 Défaite…\nTu as perdu.');
-      gs.phase = 'over';
-      return true;
-    }
-  }
-
-  if (currentMode === 'ffa') {
-    const alive = players.filter(p => p.alive);
-    if (alive.length <= 1) {
-      const winner = alive[0];
-      const iWon = winner && winner.slot === mySlot;
-      showOverlay(iWon ? `🏆 Victoire !\n${winner.pseudo} gagne !` : `💀 ${alive[0]?.pseudo || '???'} gagne !`);
-      gs.phase = 'over';
-      return true;
-    }
-  }
-
-  if (currentMode === '2v2') {
-    const me = players[mySlot];
-    const myTeam    = players.filter(p => p.team === me.team && p.alive);
-    const theirTeam = players.filter(p => p.team !== me.team && p.alive);
-    if (myTeam.length === 0) {
-      showOverlay('💀 Défaite…\nVotre équipe a perdu !'); gs.phase = 'over'; return true;
-    }
-    if (theirTeam.length === 0) {
-      showOverlay('🏆 Victoire !\nVotre équipe gagne !'); gs.phase = 'over'; return true;
-    }
-  }
-
-  return false;
+/* ── UI helpers ── */
+function setLog(text, isEnemy) {
+  addLog(text, isEnemy ? 'them' : 'me');
 }
-
-function showOverlay(text) {
-  document.getElementById('overlay').style.display = 'flex';
-  document.getElementById('overlay-text').textContent = text;
-}
-
-/* ── Log & UI ── */
-function setLog(text, isEnemy) { addLog(text, isEnemy ? 'them' : 'me'); }
 
 function addLog(text, type = 'system') {
   const box = document.getElementById('combat-log-messages');
@@ -369,39 +239,44 @@ function addLog(text, type = 'system') {
   box.scrollTop = box.scrollHeight;
 }
 
+function checkOver() {
+  if (gs.theirHP <= 0 && gs.myHP <= 0) {
+    showOverlay('🤝 Match nul !'); gs.over = true; return true;
+  }
+  if (gs.theirHP <= 0) {
+    showOverlay('🏆 Victoire !\nTu as gagné !'); gs.over = true; return true;
+  }
+  if (gs.myHP <= 0) {
+    showOverlay('💀 Défaite…\nTon adversaire a gagné.'); gs.over = true; return true;
+  }
+  return false;
+}
+
+function showOverlay(text) {
+  document.getElementById('overlay').style.display = 'flex';
+  document.getElementById('overlay-text').textContent = text;
+}
+
 /* ── Rematch ── */
 function askRematch() {
   if (rematchAsked) return;
   rematchAsked = true;
   const btn = document.querySelector('#overlay .btn');
-  btn.textContent = '⏳ En attente…';
+  btn.textContent = '⏳ En attente de l\'adversaire…';
   btn.disabled = true;
   btn.onclick = null;
-  send({ type: 'rematch_ask', slot: mySlot });
-}
-
-function handleRematchAsk(msg) {
-  if (rematchAsked) {
-    send({ type: 'rematch_go' });
-    startRematch();
-  } else {
-    document.querySelector('#overlay-text').textContent += '\n\nUn adversaire veut rejouer !';
-    const btn = document.querySelector('#overlay .btn');
-    btn.textContent = '✅ Accepter';
-    btn.disabled = false;
-    btn.onclick = () => { rematchAsked = true; send({ type: 'rematch_go' }); startRematch(); };
-  }
+  send({ type: 'rematch_ask' });
 }
 
 function startRematch() {
   rematchAsked = false;
   document.getElementById('overlay').style.display = 'none';
   const btn = document.querySelector('#overlay .btn');
-  btn.textContent = '↺ Rejouer'; btn.disabled = false; btn.onclick = askRematch;
+  btn.textContent = '↺ Rejouer';
+  btn.disabled = false;
+  btn.onclick = askRematch;
 
-  gs.choices = {}; gs.charChoices = {}; gs.phase = 'select';
-  players.length = 0;
-
+  // Séparateur dans le log
   const box = document.getElementById('combat-log-messages');
   if (box && box.children.length > 0) {
     const sep = document.createElement('div');
@@ -412,13 +287,3 @@ function startRematch() {
 
   showCharSelect();
 }
-
-// Intégration message round_result côté guest
-const _origOnMessage = onMessage;
-window._onMessage = function(msg) {
-  if (msg.type === 'round_result' && !isHost) {
-    applyRound(msg.results);
-    return;
-  }
-  _origOnMessage(msg);
-};
