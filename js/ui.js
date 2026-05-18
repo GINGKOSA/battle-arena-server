@@ -7,53 +7,38 @@ function showScreen(name) {
   document.getElementById('game').style.display          = name === 'game'   ? 'flex' : 'none';
 }
 
-/* ── Joueurs en ligne ── */
-function renderPlayers(list) {
-  const container = document.getElementById('players-list');
-  const empty     = document.getElementById('players-empty');
-  const count     = document.getElementById('online-count');
+/* ── Mode select ── */
+function showModeSelect() {
+  document.getElementById('mode-select').style.display = 'flex';
+  document.getElementById('char-select').style.display = 'none';
+  document.getElementById('battle-area').style.display = 'none';
+}
 
-  count.textContent = list.length + (list.length <= 1 ? ' joueur' : ' joueurs');
+function selectMode(mode) {
+  currentMode = mode;
+  numPlayers  = MODES[mode].maxPlayers;
 
-  if (list.length === 0) {
-    container.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  container.innerHTML = '';
-
-  list.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'player-row';
-    row.innerHTML = `
-      <img class="player-avatar" src="${p.avatar}" alt="${p.username}" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
-      <div class="player-name">${p.username}</div>
-      <button class="btn small primary" onclick="challengePlayer('${p.id}')" ${p.challenged ? 'disabled' : ''}>
-        ${p.challenged ? '⏳ Occupé' : '⚔️ Défier'}
-      </button>
-    `;
-    container.appendChild(row);
+  document.querySelectorAll('.mode-card').forEach(c => {
+    c.style.borderColor = c.dataset.mode === mode ? 'var(--fire)' : 'var(--border)';
   });
+
+  // Options 2v2
+  const opts2v2 = document.getElementById('opts-2v2');
+  if (opts2v2) opts2v2.style.display = mode === '2v2' ? 'flex' : 'none';
 }
 
-/* ── Notif défi ── */
-function showChallengeNotif(challenge) {
-  document.getElementById('notif-avatar').src = challenge.avatar || '';
-  document.getElementById('notif-name').textContent = challenge.from;
-  document.getElementById('challenge-notif').style.display = 'flex';
-}
-
-function hideChallengeNotif() {
-  if (!pendingChallenge) return;
-  pendingChallenge = null;
-  document.getElementById('challenge-notif').style.display = 'none';
+function confirmMode() {
+  document.getElementById('mode-select').style.display = 'none';
+  // Si hôte, broadcast le mode
+  if (isHost) {
+    broadcast({ type: 'room_info', mode: currentMode, teamHPMode, numPlayers });
+  }
+  showCharSelect();
 }
 
 /* ── Char select ── */
 function showCharSelect() {
-  myCharChoice   = null;
-  theirCharChoice= null;
+  gs.charChoices = {};
   document.getElementById('char-select').style.display  = 'flex';
   document.getElementById('battle-area').style.display  = 'none';
   document.getElementById('char-select-status').textContent = 'Choisis ton personnage !';
@@ -84,17 +69,40 @@ function showCharSelect() {
   });
 }
 
-function selectChar(charName) {
-  myCharChoice = charName;
-  document.querySelectorAll('.char-card').forEach(c => {
-    c.style.borderColor = c.dataset.char === charName
-      ? CHARS[charName].colorHex
-      : 'var(--border)';
+/* ── Joueurs en ligne ── */
+function renderPlayers(list) {
+  const container = document.getElementById('players-list');
+  const empty     = document.getElementById('players-empty');
+  const count     = document.getElementById('online-count');
+  count.textContent = list.length + (list.length <= 1 ? ' joueur' : ' joueurs');
+  if (list.length === 0) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  container.innerHTML = '';
+  list.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'player-row';
+    row.innerHTML = `
+      <img class="player-avatar" src="${p.avatar}" alt="${p.username}" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
+      <div class="player-name">${p.username}</div>
+      <button class="btn small primary" onclick="challengePlayer('${p.id}')" ${p.challenged?'disabled':''}>
+        ${p.challenged ? '⏳ Occupé' : '⚔️ Défier'}
+      </button>
+    `;
+    container.appendChild(row);
   });
-  document.getElementById('char-select-status').textContent =
-    `Tu as choisi ${CHARS[charName].icon} ${charName} — en attente de l'adversaire…`;
-  send({ type: 'char_choice', char: charName });
-  if (theirCharChoice) startBattle();
+}
+
+/* ── Notif défi ── */
+function showChallengeNotif(challenge) {
+  document.getElementById('notif-avatar').src = challenge.avatar || '';
+  document.getElementById('notif-name').textContent = challenge.from;
+  document.getElementById('challenge-notif').style.display = 'flex';
+}
+
+function hideChallengeNotif() {
+  if (!pendingChallenge) return;
+  pendingChallenge = null;
+  document.getElementById('challenge-notif').style.display = 'none';
 }
 
 /* ── Chat burger (mobile) ── */
@@ -103,26 +111,21 @@ function toggleChat() {
   const closeBtn = document.getElementById('chat-close');
   const isOpen   = panel.classList.toggle('open');
   if (closeBtn) closeBtn.style.display = isOpen ? 'block' : 'none';
-  if (isOpen) {
-    setTimeout(() => {
-      const msgs = document.getElementById('chat-messages');
-      if (msgs) msgs.scrollTop = msgs.scrollHeight;
-    }, 50);
-  }
+  if (isOpen) setTimeout(() => {
+    const msgs = document.getElementById('chat-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }, 50);
 }
 
-// Ferme le chat si on clique en dehors (mobile)
 document.addEventListener('click', e => {
   if (window.innerWidth > 600) return;
   const panel  = document.getElementById('chat-panel');
   const burger = document.getElementById('chat-burger');
   if (!panel || !burger) return;
-  if (panel.classList.contains('open')
-    && !panel.contains(e.target)
-    && !burger.contains(e.target)) {
+  if (panel.classList.contains('open') && !panel.contains(e.target) && !burger.contains(e.target)) {
     panel.classList.remove('open');
-    const closeBtn = document.getElementById('chat-close');
-    if (closeBtn) closeBtn.style.display = 'none';
+    const cb = document.getElementById('chat-close');
+    if (cb) cb.style.display = 'none';
   }
 });
 
@@ -131,13 +134,14 @@ function sendChat() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text) return;
-  if (!dc || dc.readyState !== 'open') { addChatMsg('⚠️ Pas encore connecté.', null); return; }
-  send({ type: 'chat', text });
-  addChatMsg(text, true);
+  const anyOpen = Object.values(dcs).some(dc => dc.readyState === 'open');
+  if (!anyOpen) { addChatMsg('⚠️ Pas encore connecté.', null); return; }
+  send({ type: 'chat', text, slot: mySlot });
+  addChatMsg(text, true, mySlot);
   input.value = '';
 }
 
-function addChatMsg(text, isMe) {
+function addChatMsg(text, isMe, slot) {
   const box = document.getElementById('chat-messages');
   const div = document.createElement('div');
   if (isMe === null) {
@@ -147,9 +151,10 @@ function addChatMsg(text, isMe) {
     div.className = 'chat-msg ' + (isMe ? 'me' : 'them');
     const who = document.createElement('span');
     who.className = 'who';
+    who.style.color = SLOT_COLORS[slot ?? 0] || 'var(--fire)';
     who.textContent = isMe
       ? (myPseudo || 'Moi')
-      : (theirPseudo || 'Adversaire');
+      : (gs.pseudos?.[slot] || `Joueur ${(slot||0)+1}`);
     const txt = document.createElement('span');
     txt.className = 'txt';
     txt.textContent = text;
