@@ -211,9 +211,10 @@ async function pollChallenge() {
       if (data.challenge.accepted && data.challenge.room) {
         clearInterval(challengePollInterval);
         document.getElementById('challenge-notif').style.display = 'none';
-        roomId  = data.challenge.room;
-        isHost  = true;
-        await startHost(roomId);
+        roomId = data.challenge.room;
+        isHost = data.challenge.isHost === true;
+        if (isHost) await startHost(roomId);
+        else        await startGuest(roomId);
         return;
       }
       if (data.challenge.declined) return;
@@ -237,9 +238,10 @@ async function acceptChallenge() {
     const data = await api('/accept', 'POST');
     document.getElementById('challenge-notif').style.display = 'none';
     pendingChallenge = null;
-    roomId  = data.room;
-    isHost  = false;
-    await startGuest(roomId);
+    roomId = data.room;
+    isHost = data.isHost === true;
+    if (isHost) await startHost(roomId);
+    else        await startGuest(roomId);
   } catch { alert('Erreur lors de l\'acceptation.'); }
 }
 

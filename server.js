@@ -180,7 +180,22 @@ http.createServer(async (req, res) => {
     const targetId = path.split('/')[2];
     const targetToken = tokens[targetId];
     if (!targetToken || !players[targetToken]) { json(res, { error: 'not_found' }, 404); return; }
-    players[targetToken].challenge = { from: me.username, fromId: me.id, avatar: me.avatar };
+
+    const target = players[targetToken];
+
+    // Défi mutuel : les deux se défient en même temps
+    // → le serveur crée directement la room, A est hôte, B est invité
+    if (target.challenge && target.challenge.fromId === me.id) {
+      const room = randRoom();
+      // A (moi) = hôte
+      me.challenge = { accepted: true, room, isHost: true };
+      // B (target) = invité
+      target.challenge = { accepted: true, room, isHost: false };
+      json(res, { ok: true, mutual: true });
+      return;
+    }
+
+    target.challenge = { from: me.username, fromId: me.id, avatar: me.avatar };
     json(res, { ok: true });
     return;
   }
@@ -196,13 +211,23 @@ http.createServer(async (req, res) => {
   if (path === '/accept' && req.method === 'POST') {
     const me = getPlayer(req);
     if (!me || !me.challenge) { json(res, { error: 'no_challenge' }, 400); return; }
+
+    // Si déjà résolu (défi mutuel côté serveur)
+    if (me.challenge.accepted && me.challenge.room) {
+      const result = { room: me.challenge.room, isHost: me.challenge.isHost };
+      me.challenge = null;
+      json(res, result);
+      return;
+    }
+
     const room = randRoom();
     const challengerToken = tokens[me.challenge.fromId];
     if (challengerToken && players[challengerToken]) {
-      players[challengerToken].challenge = { accepted: true, room };
+      // Challenger = hôte, accepteur = invité
+      players[challengerToken].challenge = { accepted: true, room, isHost: true };
     }
     me.challenge = null;
-    json(res, { room });
+    json(res, { room, isHost: false });
     return;
   }
 
@@ -220,11 +245,8 @@ http.createServer(async (req, res) => {
     return;
   }
 
-// Ne traite comme room WebRTC que si c'est exactement 4 lettres majuscules
-const room = path.slice(1).toUpperCase();
-if (!room || !/^[A-Z]{4}(-OFFER|-ANSWER)?$/.test(room)) {
-  cors(res); res.writeHead(404); res.end('Not found'); return;
-}
+  const room = path.slice(1).toUpperCase();
+  if (!room) { cors(res); res.end('Battle Arena Server OK'); return; }
 
   if (req.method === 'POST') {
     const body = await getBody(req);
