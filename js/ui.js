@@ -3,8 +3,6 @@
 
 /* ── Screens ── */
 function showScreen(name) {
-  // name : 'login' | 'lobby' | 'game'
-  // waiting-room est au niveau racine et géré séparément — on le cache ici
   const wr = document.getElementById('waiting-room');
   if (wr) wr.style.display = 'none';
 
@@ -44,31 +42,6 @@ function renderOnlinePlayers(list) {
   });
 }
 
-/* ── Chat burger (mobile) ── */
-function toggleChat() {
-  const panel = document.getElementById('chat-panel');
-  const close = document.getElementById('chat-close');
-  const open  = panel.classList.toggle('open');
-  if (close) close.style.display = open ? 'block' : 'none';
-  if (open) setTimeout(() => {
-    const m = document.getElementById('chat-messages');
-    if (m) m.scrollTop = m.scrollHeight;
-  }, 50);
-}
-
-document.addEventListener('click', e => {
-  if (window.innerWidth > 600) return;
-  const panel  = document.getElementById('chat-panel');
-  const burger = document.getElementById('chat-burger');
-  if (!panel || !burger) return;
-  if (panel.classList.contains('open') &&
-      !panel.contains(e.target) && !burger.contains(e.target)) {
-    panel.classList.remove('open');
-    const c = document.getElementById('chat-close');
-    if (c) c.style.display = 'none';
-  }
-});
-
 /* ── Chat ── */
 function sendChat() {
   const input = document.getElementById('chat-input');
@@ -83,6 +56,7 @@ function sendChat() {
 
 function addChatMsg(text, isMe, slot) {
   const box = document.getElementById('chat-messages');
+  if (!box) return;
   const div = document.createElement('div');
 
   if (isMe === null) {
@@ -108,20 +82,64 @@ function addChatMsg(text, isMe, slot) {
   box.scrollTop = box.scrollHeight;
 }
 
-/* ── Combat log ── */
+/* ══════════════════════════════════════════════════
+   COMBAT LOG — style Pokémon DS
+   • Le texte s'affiche dans la boîte de dialogue
+     de l'écran du haut (#pkm-dialog-text), lettre
+     par lettre avec effet typewriter.
+   • Il est aussi archivé dans #combat-log-messages
+     (écran du bas) pour relecture.
+══════════════════════════════════════════════════ */
+
+let _dialogQueue = [];   // file d'attente des messages
+let _dialogBusy  = false; // typewriter en cours ?
+
 function addLog(text, type = 'system') {
+  // 1. Archiver dans le log du bas (historique)
   const box = document.getElementById('combat-log-messages');
-  if (!box) return;
-  const e = document.createElement('div');
-  e.className = 'log-entry ' + type;
-  const b = document.createElement('span');
-  b.className = 'log-badge';
-  b.textContent = type === 'me' ? 'Toi' : type === 'them' ? 'Ennemi' : '•';
-  const t = document.createElement('span');
-  t.className = 'log-text';
-  t.textContent = text;
-  e.appendChild(b);
-  e.appendChild(t);
-  box.appendChild(e);
-  box.scrollTop = box.scrollHeight;
+  if (box) {
+    const e = document.createElement('div');
+    e.className = 'log-entry ' + type;
+    const b = document.createElement('span');
+    b.className = 'log-badge';
+    b.textContent = type === 'me' ? 'Toi' : type === 'them' ? 'Ennemi' : '•';
+    const t = document.createElement('span');
+    t.className = 'log-text';
+    t.textContent = text;
+    e.appendChild(b);
+    e.appendChild(t);
+    box.appendChild(e);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // 2. Afficher dans la boîte de dialogue (écran du haut)
+  _dialogQueue.push({ text, type });
+  if (!_dialogBusy) _nextDialog();
+}
+
+function _nextDialog() {
+  if (!_dialogQueue.length) { _dialogBusy = false; return; }
+  _dialogBusy = true;
+  const { text, type } = _dialogQueue.shift();
+
+  const el = document.getElementById('pkm-dialog-text');
+  if (!el) { _nextDialog(); return; }
+
+  // Couleur selon le type
+  const color = type === 'me' ? '#cc3300' : type === 'them' ? '#0055aa' : '#1a1a1a';
+  el.style.color = color;
+  el.textContent = '';
+
+  // Typewriter lettre par lettre
+  let i = 0;
+  const speed = Math.max(18, Math.min(40, 1200 / text.length)); // adaptatif
+  const iv = setInterval(() => {
+    el.textContent += text[i];
+    i++;
+    if (i >= text.length) {
+      clearInterval(iv);
+      // Pause avant le prochain message
+      setTimeout(_nextDialog, text.length > 40 ? 1800 : 1200);
+    }
+  }, speed);
 }
