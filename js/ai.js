@@ -26,7 +26,7 @@ function startVsAI(count, mode) {
   count = count || 2;
   mode  = mode  || '1v1';
 
-  const p = prompt('Ton pseudo :')?.trim().slice(0, 20);
+  const p = (G.myPseudo) || prompt('Ton pseudo :')?.trim().slice(0, 20);
   if (!p) return;
 
   G.myPseudo  = p;
