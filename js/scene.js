@@ -17,7 +17,6 @@ function initThree() {
   r3.setPixelRatio(Math.min(devicePixelRatio, 2));
   r3.shadowMap.enabled = true;
   r3.shadowMap.type    = THREE.PCFSoftShadowMap;
-  r3.setClearColor(0x1a2a1a, 1);
 
   s3   = new THREE.Scene();
   cam3 = new THREE.PerspectiveCamera(35, 2, 0.1, 200);
