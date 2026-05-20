@@ -37,6 +37,8 @@ function initThree() {
   buildScene();
   buildChars();
   animate3();
+  // Init des boutons gyroscope sur l'écran du haut
+  if (typeof initGyroUI === 'function') initGyroUI();
 }
 
 /* ── Décors ── */
@@ -444,4 +446,5 @@ function animate3() {
   });
 
   r3.render(s3, cam3);
-}
+  }
+
