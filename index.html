@@ -114,80 +114,68 @@
       <div id="char-cards"></div>
     </div>
 
-    <!-- ═══════════════════════════════════
+    <!-- ═══════════════════════════════════════
          BATTLE AREA — New 3DS XL FRAME
-         L'image est en background-image CSS
-         sur #ds-frame (padding-bottom trick)
-    ══════════════════════════════════════ -->
+    ════════════════════════════════════════ -->
     <div id="battle-area">
-      <div id="ds-frame">
-        <!-- Image 3DS : on essaie plusieurs chemins selon la structure du repo -->
-        <img id="ds-img" src="Images/New_3DS_XL.png"
-          onerror="
-            const paths=['Images/New_3DS_XL.png','images/New_3DS_XL.png','New_3DS_XL.png','img/New_3DS_XL.png'];
-            let i=0;
-            const t=setInterval(()=>{
-              i++;if(i>=paths.length){clearInterval(t);return;}
-              this.src=paths[i];
-            },50);
-          "
-          alt="" draggable="false"
-          style="position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;z-index:0"/>
 
-        <!-- TOP SCREEN : scène Three.js -->
+      <!-- 3DS chassis wrapper -->
+      <div id="ds-frame">
+        <img id="ds-img" src="Images/New_3DS_XL.png" alt="New 3DS XL" draggable="false"/>
+
+        <!-- TOP SCREEN — Three.js scene -->
         <div id="top-screen">
           <canvas id="battle-canvas"></canvas>
           <div id="overlay">
             <div id="overlay-text"></div>
             <button class="btn" onclick="askRematch()">↺ Rejouer</button>
           </div>
-          <!-- Boîte de dialogue style Pokémon, en bas de l'écran du haut -->
-          <div id="pkm-dialog-box">
-            <div id="pkm-dialog-text">Que doit faire <span id="pkm-my-name">…</span> ?</div>
-          </div>
         </div>
 
-        <!-- BOTTOM SCREEN : style Pokémon DS -->
+        <!-- BOTTOM SCREEN — actions + chat -->
         <div id="bottom-screen">
 
-          <!-- Grille 4 attaques -->
-          <div id="pkm-move-grid">
-            <div id="actions-grid"></div>
+          <!-- Tab bar -->
+          <div id="ds-tabs">
+            <button class="ds-tab active" onclick="switchTab('actions')">⚔️ Actions</button>
+            <button class="ds-tab" onclick="switchTab('log')">📜 Log</button>
+            <button class="ds-tab" onclick="switchTab('chat')">💬 Chat</button>
+          </div>
+
+          <!-- Actions tab -->
+          <div id="tab-actions" class="ds-tabcontent active">
+            <div id="actions-grid" class="actions"></div>
             <div id="target-picker"></div>
             <div id="waiting-action">
-              <span class="dot" style="display:inline-block;margin-right:5px"></span>En attente…
+              <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente des autres…
             </div>
           </div>
 
-          <!-- Log + Chat compacts -->
-          <div id="pkm-sub-area">
-            <div id="pkm-tabs">
-              <button class="pkm-tab active" onclick="pkmTab(this,'log')">📜 Log</button>
-              <button class="pkm-tab"        onclick="pkmTab(this,'chat')">💬 Chat</button>
+          <!-- Combat log tab -->
+          <div id="tab-log" class="ds-tabcontent">
+            <div id="combat-log-messages"></div>
+          </div>
+
+          <!-- Chat tab -->
+          <div id="tab-chat" class="ds-tabcontent">
+            <div id="chat-messages">
+              <div class="chat-msg system">Que le combat commence !</div>
             </div>
-            <div id="pkm-tab-log" class="pkm-tabcontent active">
-              <div id="combat-log-messages"></div>
-            </div>
-            <div id="pkm-tab-chat" class="pkm-tabcontent">
-              <div id="chat-messages">
-                <div class="chat-msg system">Que le combat commence !</div>
-              </div>
-              <div id="chat-input-row">
-                <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
-                  onkeydown="if(event.key==='Enter')sendChat()"/>
-                <button id="chat-send" onclick="sendChat()">➤</button>
-              </div>
+            <div id="chat-input-row">
+              <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
+                onkeydown="if(event.key==='Enter')sendChat()"/>
+              <button id="chat-send" onclick="sendChat()">➤</button>
             </div>
           </div>
 
         </div><!-- /bottom-screen -->
-
       </div><!-- /ds-frame -->
+
     </div><!-- /battle-area -->
 
   </div><!-- /game -->
 
-  <footer>WebRTC P2P · Discord OAuth · Render · HTML/JS/CSS · Claude</footer>
+  <footer>WebRTC P2P · Discord OAuth · Render · HTML/JS/CSS</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -198,22 +186,27 @@
 <script src="js/scene.js"></script>
 <script src="js/combat.js"></script>
 <script>
-function pkmTab(btn, name) {
-  document.querySelectorAll('.pkm-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.pkm-tabcontent').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('pkm-tab-' + name).classList.add('active');
-  const el = document.getElementById(name === 'chat' ? 'chat-messages' : 'combat-log-messages');
-  if (el) setTimeout(() => el.scrollTop = el.scrollHeight, 20);
+// Tab switcher for bottom screen
+function switchTab(name) {
+  document.querySelectorAll('.ds-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.ds-tabcontent').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'chat') {
+    const m = document.getElementById('chat-messages');
+    if (m) m.scrollTop = m.scrollHeight;
+  }
+  if (name === 'log') {
+    const l = document.getElementById('combat-log-messages');
+    if (l) l.scrollTop = l.scrollHeight;
+  }
 }
 
-// Met à jour le nom dans la boîte de dialogue
-function updateDialogName() {
-  const el = document.getElementById('pkm-my-name');
-  if (el && G.myPseudo) el.textContent = G.myPseudo.toUpperCase();
-}
+// Override addLog to also switch tab indicator
+const _origAddLog = typeof addLog === 'function' ? addLog : null;
 
 initAuth();
 </script>
 </body>
 </html>
+
