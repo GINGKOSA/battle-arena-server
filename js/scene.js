@@ -20,7 +20,7 @@ function initThree() {
   r3.setClearColor(0x1a2a1a, 1);
 
   s3   = new THREE.Scene();
-  cam3 = new THREE.PerspectiveCamera(50, 2, 0.1, 200);
+  cam3 = new THREE.PerspectiveCamera(35, 2, 0.1, 200);
   cam3.position.set(0, 3.5, 7);
   cam3.lookAt(0, 1.2, -2);
 
@@ -168,8 +168,8 @@ function buildChars() {
     const me = G.players.find(p => p.slot === G.mySlot);
     if (me) {
       const col = SLOT_CLR_3D[me.slot] || 0xff5522;
-      const m   = makeChar(col, me.char.name === 'Pyros', 1.5);
-      m.position.set(-2.5, 0, 3.5);
+      const m   = makeChar(col, me.char.name === 'Pyros', 1.0);
+      m.position.set(-2.5, 0, 2.5);
       m.rotation.y = 0.62; // dos caméra, tourné vers le centre de l'arène
       s3.add(m); meshes[me.slot] = m;
       // Cercle
@@ -189,15 +189,15 @@ function buildChars() {
     //   3 ennemis : triangle — 1 au fond-centre, 2 devant gauche+droite
     // [x, y, z, scale, rotY]  — tous tournés vers le centre (0.5, 0.5)
     const enemyLayouts = {
-      1: [[ 3.5,  0,    2.8, 1.00, -2.225]],   // droite-milieu
+      1: [[ 3.0,  0,    1.5, 1.00, -2.225]],
       2: [
-        [-2.0,  0,   -2.5, 1.00,  0.695],   // haut-gauche
-        [ 3.2,  0,   -2.0, 1.00, -0.824],   // haut-droite
+        [-1.5,  0,   -1.2, 1.00,  0.695],
+        [ 3.0,  0,   -1.0, 1.00, -0.824],
       ],
       3: [
-        [-2.0,  0,   -2.5, 0.95,  0.695],   // haut-gauche  (validé)
-        [ 3.2,  0,   -2.0, 0.95, -0.824],   // haut-droite
-        [ 3.5,  0,    2.8, 0.95, -2.225],   // droite-milieu
+        [-1.5,  0,   -1.2, 1.00,  0.695],   // haut-gauche
+        [ 3.0,  0,   -1.0, 1.00, -0.824],   // haut-droite
+        [ 3.0,  0,    1.5, 1.00, -2.225],   // droite-bas
       ],
     };
 
