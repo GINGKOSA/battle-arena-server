@@ -166,22 +166,6 @@ function _nextDialog() {
 /* ══════════════════════════════════════════════════
    LOBBIES PUBLICS
 ══════════════════════════════════════════════════ */
-function showCreateLobby() {
-  const f = document.getElementById('create-lobby-form');
-  if (f) f.style.display = 'flex';
-}
-function hideCreateLobby() {
-  const f = document.getElementById('create-lobby-form');
-  if (f) f.style.display = 'none';
-}
-
-function confirmCreateLobby() {
-  const slots = +document.getElementById('lobby-slots').value;
-  const mode  = slots === 2 ? '1v1' : 'ffa';
-  hideCreateLobby();
-  createLobby(slots, mode);
-}
-
 function renderLobbyList(list) {
   const el    = document.getElementById('lobbies-list');
   const empty = document.getElementById('lobbies-empty');

@@ -105,19 +105,7 @@
     <div id="lobbies-panel">
       <div id="lobbies-header">
         <div id="lobbies-title">🏟️ Lobbies ouverts</div>
-        <button class="btn small primary" onclick="showCreateLobby()">+ Créer</button>
-      </div>
-      <!-- Formulaire création lobby (caché par défaut) -->
-      <div id="create-lobby-form" style="display:none;padding:12px 18px;border-bottom:1px solid var(--border);gap:10px;flex-direction:column">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select id="lobby-slots" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'Exo 2',sans-serif;font-size:13px;outline:none">
-            <option value="2">👤 1v1 (2 joueurs)</option>
-            <option value="3">👥 FFA (3 joueurs)</option>
-            <option value="4">👥 FFA/2v2 (4 joueurs)</option>
-          </select>
-          <button class="btn primary" onclick="confirmCreateLobby()">🏟️ Ouvrir le lobby</button>
-          <button class="btn small" onclick="hideCreateLobby()">Annuler</button>
-        </div>
+        <button class="btn small primary" onclick="createPublicLobby()">⚔️ Créer un lobby</button>
       </div>
       <div id="lobbies-list"></div>
       <div id="lobbies-empty">Aucun lobby ouvert…</div>

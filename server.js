@@ -109,7 +109,6 @@ http.createServer(async (req, res) => {
   if (p === '/lobby/create' && req.method === 'POST') {
     const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
     const body = JSON.parse(await readBody(req) || '{}');
-    // Fermer l'ancien lobby de cet hôte s'il existe
     Object.keys(lobbies).forEach(r => { if (lobbies[r].hostId === me.id) delete lobbies[r]; });
     const room = randRoom();
     lobbies[room] = {
@@ -117,13 +116,24 @@ http.createServer(async (req, res) => {
       hostName:  me.username,
       avatar:    me.avatar,
       room,
-      maxSlots:  body.maxSlots  || 2,
-      mode:      body.mode      || '1v1',
+      maxSlots:  body.maxSlots || 4,
+      mode:      body.mode     || '1v1',
       players:   [me.id],
       createdAt: Date.now(),
     };
     me.lobby = room;
     json(res, { room }); return;
+  }
+
+  // Mettre à jour le lobby (mode, maxSlots) — appelé quand l'hôte change les options
+  if (p === '/lobby/update' && req.method === 'POST') {
+    const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
+    const body = JSON.parse(await readBody(req) || '{}');
+    const lobby = Object.values(lobbies).find(l => l.hostId === me.id);
+    if (!lobby) { json(res,{error:'no_lobby'},404); return; }
+    if (body.mode)     lobby.mode     = body.mode;
+    if (body.maxSlots) lobby.maxSlots = body.maxSlots;
+    json(res, {ok:true}); return;
   }
 
   // Lister les lobbies ouverts

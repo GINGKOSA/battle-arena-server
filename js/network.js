@@ -153,24 +153,27 @@ function onPeerUp(slot) {
   updateWaitStatus();
 
   if (G.isHost) {
-    // Arrêter le waiting-room, passer en game-lobby
     clearInterval(G._hostPoll);
     G._hostPoll = null;
-    stopPolls();
-    document.getElementById('waiting-room').style.display = 'none';
-    // Cacher le wrapper anon si présent
-    const anonWrap = document.getElementById('anon-wait-wrap');
-    if (anonWrap) anonWrap.style.display = 'none';
-    showScreen('game');
-    G.phase = 'lobby';
 
-    // Hôte : s'ajouter lui-même si pas encore fait
+    // Si on vient du waiting-room (mode code), passer au game-lobby
+    // Si on est déjà dans le game-lobby (mode lobby public), juste mettre à jour
+    if (G.phase === 'waiting') {
+      stopPolls();
+      document.getElementById('waiting-room').style.display = 'none';
+      const anonWrap = document.getElementById('anon-wait-wrap');
+      if (anonWrap) anonWrap.style.display = 'none';
+      showScreen('game');
+      G.phase = 'lobby';
+    }
+
+    // S'ajouter si pas encore fait
     if (!G.lobbyPlayers.find(p => p.slot === 0)) {
       G.lobbyPlayers = [{ slot: 0, pseudo: G.myPseudo, avatar: G.myProfile?.avatar || null, ready: false }];
     }
     renderLobby();
 
-    // Relancer le polling des answers pour d'éventuels joueurs supplémentaires
+    // Relancer le polling pour d'éventuels joueurs supplémentaires
     G._hostPoll = setInterval(async () => {
       for (let s = 1; s <= 3; s++) {
         if (dcs[s]?.readyState === 'open') continue;
@@ -181,7 +184,7 @@ function onPeerUp(slot) {
       }
     }, 2000);
   }
-  // Guest : il attendra le message lobby_state de l'hôte (géré dans handleLobbyMessage)
+  // Guest : il attendra le message lobby_state de l'hôte
 }
 
 function onPeerDown(slot) {
@@ -194,6 +197,12 @@ function updateWaitStatus() {
   const connected = Object.values(dcs).filter(dc => dc.readyState === 'open').length;
   const total = connected + 1;
   setWaitStatus(`${total} joueur${total > 1 ? 's' : ''} connecté${total > 1 ? 's' : ''}…`);
+}
+
+/* ── Fermer le lobby public quand la partie commence ── */
+async function closeLobby() {
+  if (!G.myToken || !G.isHost) return;
+  try { await api('/lobby/close', 'POST'); } catch {}
 }
 
 /* ── Rooms haut niveau ── */
@@ -280,18 +289,25 @@ const setWaitStatus = t => {
 
 /* ── Lobbies publics ── */
 
-async function createLobby(maxSlots, mode) {
+async function createPublicLobby() {
   try {
-    const data = await api('/lobby/create', 'POST', { maxSlots, mode });
+    // Créer le lobby sur le serveur (sans maxSlots prédéfini — géré dans le lobby)
+    const data = await api('/lobby/create', 'POST', { maxSlots: 4, mode: '1v1' });
     if (!data.room) { alert('Erreur création lobby'); return; }
-    G.roomId  = data.room;
-    G.isHost  = true;
-    G.mySlot  = 0;
+    G.roomId       = data.room;
+    G.isHost       = true;
+    G.mySlot       = 0;
+    G.mode         = '1v1';
     G.lobbyPlayers = [{ slot:0, pseudo:G.myPseudo, avatar:G.myProfile?.avatar||null, ready:false }];
-    G.phase   = 'waiting';
-    showRoomWait();
+    G.phase        = 'lobby';
+    stopPolls();
+    showScreen('game');
+    renderLobby();
+    // Démarrer WebRTC en arrière-plan
     await startHost();
-  } catch(e) { console.error('createLobby', e); }
+    // Reprendre les polls Discord pour voir les joueurs qui rejoignent
+    startPolls();
+  } catch(e) { console.error('createPublicLobby', e); }
 }
 
 async function joinLobby(room) {

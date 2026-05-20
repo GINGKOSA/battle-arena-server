@@ -36,6 +36,11 @@ function renderModeButtons() {
         document.getElementById('lobby-2v2-opts').style.display = modeId === '2v2' ? 'flex' : 'none';
         renderModeButtons();
         broadcast({ type: 'lobby_state', mode: G.mode, teamHPMode: G.teamHPMode, players: G.lobbyPlayers });
+        // Mettre à jour le lobby public si connecté Discord
+        if (G.myToken && typeof api === 'function') {
+          const slots = G.lobbyPlayers.length || 4;
+          api('/lobby/update', 'POST', { mode: modeId, maxSlots: slots }).catch(()=>{});
+        }
       };
     })(m.id);
     cont.appendChild(btn);
@@ -223,6 +228,8 @@ var charChoices = {};
 
 function startCharSelect() {
   G.phase = 'charselect';
+  // Fermer le lobby public — la partie commence
+  if (typeof closeLobby === 'function') closeLobby();
   document.getElementById('game-lobby').style.display  = 'none';
   document.getElementById('char-select').style.display = 'flex';
   document.getElementById('char-select-status').textContent = 'Choisis ton personnage !';
