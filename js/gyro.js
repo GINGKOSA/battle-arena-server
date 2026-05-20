@@ -93,19 +93,63 @@ function _onOrientation(e) {
 
   const radius = GYRO._basePos.length();
 
-  // Convertir en radians + petite sensibilité
-  const pitchOffset = THREE.MathUtils.degToRad((beta - 45) * 0.3);   // avant/arrière
-  const yawOffset   = THREE.MathUtils.degToRad(relAlpha   * 0.4);    // gauche/droite
+  // ── 3 axes ──
+  // pitch : beta  → inclinaison avant/arrière  (axe X)
+  // yaw   : alpha → rotation gauche/droite      (axe Y, pivoter sur soi)
+  // roll  : gamma → inclinaison latérale        (axe Z, pencher le cou)
 
-  // Clamp pitch pour ne pas retourner la cam
-  const pitchClamped = Math.max(-0.4, Math.min(0.6, pitchOffset));
+  const pitchOffset = THREE.MathUtils.degToRad((beta  - 45) * 0.30);  // avant/arrière
+  const yawOffset   = THREE.MathUtils.degToRad( relAlpha    * 0.40);  // rotation Y
+  const rollOffset  = THREE.MathUtils.degToRad( gamma       * 0.25);  // inclinaison Z
 
-  // Nouvelle position caméra (orbite autour du lookAt)
+  // Clamp chaque axe
+  const pitchClamped = Math.max(-0.45, Math.min(0.55, pitchOffset));
+  const yawClamped   = Math.max(-1.20, Math.min(1.20, yawOffset));
+  const rollClamped  = Math.max(-0.30, Math.min(0.30, rollOffset));
+
+  // Orbite : on applique pitch+yaw sur la position, roll sur la rotation caméra
+  if (!GYRO._basePos) gyroSaveBase();
   const base = GYRO._basePos.clone();
-  base.applyEuler(new THREE.Euler(pitchClamped, yawOffset, 0, 'YXZ'));
+  base.applyEuler(new THREE.Euler(pitchClamped, yawClamped, 0, 'YXZ'));
   cam3.position.copy(base);
   cam3.lookAt(GYRO._baseLookAt);
+  // Roll : légère inclinaison de la caméra sur elle-même (axe Z local)
+  cam3.rotateZ(rollClamped);
   cam3.updateMatrixWorld(true);
+}
+
+/* ── Simulation souris (desktop) ── */
+function _isMobile() {
+  return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+// État souris pour la simulation 3 axes
+const _mouse = { x: 0, y: 0, roll: 0 };
+
+function _onMouseMove(e) {
+  if (!GYRO.enabled || !cam3) return;
+  const screen = document.getElementById('top-screen');
+  if (!screen) return;
+  const rect = screen.getBoundingClientRect();
+
+  // Normaliser -1 → +1
+  const nx = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  const ny = ((e.clientY - rect.top)  / rect.height) * 2 - 1;
+
+  // Axe X souris → yaw   (alpha, pivoter gauche/droite)
+  // Axe Y souris → pitch  (beta,  incliner avant/arrière)
+  // Molette      → roll   (gamma, pencher latéralement)
+  const fakeBeta  = 45 + ny * 28;       // pitch : centré à 45°
+  const fakeAlpha = nx * 180;            // yaw   : -180 → +180
+  const fakeGamma = _mouse.roll;         // roll  : via molette
+
+  _onOrientation({ alpha: fakeAlpha, beta: fakeBeta, gamma: fakeGamma });
+}
+
+function _onMouseWheel(e) {
+  if (!GYRO.enabled) return;
+  // Molette = axe roll (gamma simulé)
+  _mouse.roll = Math.max(-40, Math.min(40, _mouse.roll + e.deltaY * 0.05));
 }
 
 /* ── Activation / désactivation ── */
@@ -115,32 +159,55 @@ async function gyroToggle() {
     return;
   }
 
-  // iOS 13+ : demande de permission
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      const perm = await DeviceOrientationEvent.requestPermission();
-      if (perm !== 'granted') {
-        showGyroStatus('❌ Permission refusée');
+  gyroSaveBase();
+  GYRO.enabled   = true;
+  GYRO.frozen    = false;
+  GYRO.baseAlpha = null;
+
+  if (_isMobile()) {
+    // iOS 13+ : demande de permission
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm !== 'granted') {
+          showGyroStatus('❌ Permission refusée');
+          GYRO.enabled = false;
+          return;
+        }
+      } catch {
+        showGyroStatus('❌ Erreur permission');
+        GYRO.enabled = false;
         return;
       }
-    } catch {
-      showGyroStatus('❌ Erreur permission');
-      return;
     }
+    window.addEventListener('deviceorientation', _onOrientation);
+    showGyroStatus('📱 Gyroscope actif');
+  } else {
+    // Desktop : simulation souris (move + molette pour roll)
+    const screen = document.getElementById('top-screen');
+    if (screen) {
+      screen.addEventListener('mousemove', _onMouseMove);
+      screen.addEventListener('wheel',     _onMouseWheel, { passive: true });
+    }
+    _mouse.roll = 0;
+    showGyroStatus('🖱️ Souris (molette = roll)');
   }
 
-  gyroSaveBase();
-  window.addEventListener('deviceorientation', _onOrientation);
-  GYRO.enabled = true;
-  GYRO.frozen  = false;
-  GYRO.baseAlpha = null;
   updateGyroBtn(true);
-  showGyroStatus('📱 Gyroscope actif');
 }
 
 function gyroDisable() {
-  window.removeEventListener('deviceorientation', _onOrientation);
+  if (_isMobile()) {
+    window.removeEventListener('deviceorientation', _onOrientation);
+  } else {
+    const screen = document.getElementById('top-screen');
+    if (screen) {
+      screen.removeEventListener('mousemove', _onMouseMove);
+      screen.removeEventListener('wheel',     _onMouseWheel);
+    }
+    _mouse.roll = 0;
+  }
   GYRO.enabled = false;
   GYRO.frozen  = false;
   gyroResetCam();

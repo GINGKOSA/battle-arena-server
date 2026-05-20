@@ -13,6 +13,9 @@ function renderLobby() {
   document.getElementById('battle-area').style.display = 'none';
   document.getElementById('lobby-room-code').textContent = G.roomId;
   document.getElementById('lobby-mode-section').style.display = G.isHost ? 'flex' : 'none';
+  // Synchroniser le select PV avec G.teamHPMode
+  var sel = document.getElementById('teamhp-select');
+  if (sel) sel.value = G.teamHPMode || 'individual';
   renderModeButtons();
   renderLobbyPlayers();
   renderReadyBtn();
@@ -83,6 +86,20 @@ function setReady() {
 
 function checkAllReady() {
   if (G.lobbyPlayers.length < 2) return;
+  // Mode IA : marquer les bots non-prêts avec délai
+  if (G.aiEnabled) {
+    var notReady = G.lobbyPlayers.filter(function(p){ return p.isAI && !p.ready; });
+    if (notReady.length) {
+      notReady.forEach(function(bot, i) {
+        setTimeout(function() {
+          bot.ready = true;
+          renderLobbyPlayers();
+          if (G.lobbyPlayers.every(function(p){ return p.ready; })) startCharSelect();
+        }, 500 + i * 300 + Math.random() * 300);
+      });
+      return;
+    }
+  }
   if (G.lobbyPlayers.every(function(p){ return p.ready; })) startCharSelect();
 }
 
@@ -123,7 +140,6 @@ function onMessage(msg) {
       showGameOver(msg.outcome);
       break;
     case 'new_round':
-      /* L'hôte démarre un nouveau round — les guests remettent leur UI en état */
       if (!G.isHost) {
         G.phase  = 'fight';
         G.choices = {};
@@ -214,6 +230,16 @@ function startCharSelect() {
 }
 
 function renderCharCards() {
+  // Mode IA : déclencher le choix de perso des bots
+  if (G.aiEnabled) {
+    setTimeout(function() {
+      G.lobbyPlayers.filter(function(p){ return p.isAI; }).forEach(function(bot, i) {
+        setTimeout(function() {
+          if (typeof aiPickCharForSlot === 'function') aiPickCharForSlot(bot.slot);
+        }, 600 + i * 400 + Math.random() * 400);
+      });
+    }, 100);
+  }
   var cards = document.getElementById('char-cards');
   cards.innerHTML = '';
   Object.values(CHARS).forEach(function(c) {
@@ -306,6 +332,7 @@ function beginFight() {
   });
 
   G.choices = {};
+  if (typeof clearDialogQueue === 'function') clearDialogQueue();
   if (!r3) initThree(); else resetThreeChars();
   renderActionPanel();
   addLog('⚔️ Que le combat commence !', 'system');
@@ -345,8 +372,13 @@ function renderActionPanel() {
 
   document.getElementById('waiting-action').style.display = 'none';
   document.getElementById('target-picker').style.display  = 'none';
-  /* FIX: réactiver tous les boutons explicitement */
   document.querySelectorAll('#actions-grid .action-btn').forEach(function(b){ b.disabled = false; });
+
+  // Mode IA : déclencher le tour des bots
+  if (G.aiEnabled && typeof aiPlayTurn === 'function') {
+    clearTimeout(AI._timer);
+    AI._timer = setTimeout(aiPlayTurn, typeof aiDelay === 'function' ? aiDelay() : 1000);
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -458,10 +490,6 @@ function submitAction(move, targetSlot) {
   document.querySelectorAll('#actions-grid .action-btn').forEach(function(b){ b.disabled = true; });
   document.getElementById('target-picker').style.display  = 'none';
   document.getElementById('waiting-action').style.display = 'block';
-
-  var tgt = G.players.find(function(p){ return p.slot === targetSlot; });
-  addLog(G.myPseudo + ' prépare ' + move.icon + ' ' + move.name +
-    (tgt ? ' → ' + tgt.pseudo : '') + '…', 'me');
 
   /* FIX: send envoie le move complet tel quel — les propriétés heal/dmg/acc
      sont des primitives, elles survivent à la sérialisation JSON sans problème */
@@ -615,15 +643,45 @@ async function applyOne(atk, tgt, move, hit) {
   var isMe = atk.slot === G.mySlot;
 
   if (move.heal) {
-    var gain = Math.min(move.heal, tgt.maxHP - tgt.hp);
-    tgt.hp = Math.min(tgt.maxHP, tgt.hp + gain);
-    addLog(atk.pseudo + ' soigne ' + tgt.pseudo + ' +' + gain + ' PV 💚', isMe ? 'me' : 'them');
+    if (G.mode === '2v2' && G.teamHPMode === 'shared') {
+      // Soin partagé : soigne toute l'équipe de la cible
+      var teammates = G.players.filter(function(p){ return p.team === tgt.team && p.alive; });
+      var gainTotal = 0;
+      teammates.forEach(function(p) {
+        var g = Math.min(move.heal, p.maxHP - p.hp);
+        p.hp = Math.min(p.maxHP, p.hp + g);
+        gainTotal += g;
+      });
+      addLog(atk.pseudo + ' soigne l\'equipe +' + gainTotal + ' PV 💚', isMe ? 'me' : 'them');
+    } else {
+      var gain = Math.min(move.heal, tgt.maxHP - tgt.hp);
+      tgt.hp = Math.min(tgt.maxHP, tgt.hp + gain);
+      addLog(atk.pseudo + ' soigne ' + tgt.pseudo + ' +' + gain + ' PV 💚', isMe ? 'me' : 'them');
+    }
   } else if (hit) {
-    tgt.hp = Math.max(0, tgt.hp - move.dmg);
-    if (tgt.hp === 0) tgt.alive = false;
-    addLog(atk.pseudo + ' → ' + move.icon + ' ' + move.name + ' → ' + tgt.pseudo +
-      ' (' + move.dmg + ' dmg)', isMe ? 'me' : 'them');
-    spawnHitParticles(tgt.slot);
+    if (G.mode === '2v2' && G.teamHPMode === 'shared') {
+      // Dégâts partagés : répartis sur toute l'équipe vivante
+      var teamTargets = G.players.filter(function(p){ return p.team === tgt.team; });
+      var remaining   = move.dmg;
+      // Répartir les dégâts sur l'équipe
+      teamTargets.forEach(function(p) {
+        if (remaining <= 0) return;
+        var dmg = Math.min(remaining, p.hp);
+        p.hp      = Math.max(0, p.hp - dmg);
+        remaining -= dmg;
+        // En shared : ne pas marquer alive=false individuellement
+        // c'est isOver() qui détecte la mort via la somme des HP
+        spawnHitParticles(p.slot);
+      });
+      addLog(atk.pseudo + ' → ' + move.icon + ' ' + move.name + ' → Équipe ' +
+        (tgt.team === 0 ? 'A' : 'B') + ' (' + move.dmg + ' dmg partagés)', isMe ? 'me' : 'them');
+    } else {
+      tgt.hp = Math.max(0, tgt.hp - move.dmg);
+      if (tgt.hp === 0) tgt.alive = false;
+      addLog(atk.pseudo + ' → ' + move.icon + ' ' + move.name + ' → ' + tgt.pseudo +
+        ' (' + move.dmg + ' dmg)', isMe ? 'me' : 'them');
+      spawnHitParticles(tgt.slot);
+    }
   } else {
     addLog(atk.pseudo + ' rate ' + move.icon + ' ' + move.name + ' !', isMe ? 'me' : 'them');
   }
@@ -634,6 +692,16 @@ async function applyOne(atk, tgt, move, hit) {
    ══════════════════════════════════════════ */
 function isOver() {
   if (!G.players || G.players.length === 0) return false;
+
+  if (G.mode === '2v2' && G.teamHPMode === 'shared') {
+    // En PV partagés : une équipe est éliminée quand la somme de ses HP = 0
+    var hp0 = G.players.filter(function(p){ return p.team === 0; })
+                       .reduce(function(s,p){ return s + p.hp; }, 0);
+    var hp1 = G.players.filter(function(p){ return p.team === 1; })
+                       .reduce(function(s,p){ return s + p.hp; }, 0);
+    return hp0 <= 0 || hp1 <= 0;
+  }
+
   var alive = G.players.filter(function(p){ return p.alive; });
   if (G.mode === '1v1' || G.mode === 'ffa') return alive.length <= 1;
   if (G.mode === '2v2') {
@@ -645,11 +713,16 @@ function isOver() {
 
 /* Calcule l'outcome côté hôte — résultat brut transmis à tous */
 function computeOutcome() {
+  if (G.mode === '2v2' && G.teamHPMode === 'shared') {
+    var hp0 = G.players.filter(function(p){ return p.team === 0; })
+                       .reduce(function(s,p){ return s + p.hp; }, 0);
+    return { type: 'team', winnerTeam: hp0 > 0 ? 0 : 1 };
+  }
   if (G.mode === '1v1' || G.mode === 'ffa') {
     var winner = G.players.find(function(p){ return p.alive; });
     return { type: 'winner', winnerSlot: winner ? winner.slot : -1 };
   }
-  /* 2v2 : quelle équipe a encore des survivants ? */
+  /* 2v2 normal : quelle équipe a encore des survivants ? */
   var team0alive = G.players.some(function(p){ return p.alive && p.team === 0; });
   return { type: 'team', winnerTeam: team0alive ? 0 : 1 };
 }
@@ -684,6 +757,13 @@ var _rematchAsked = false;
 function askRematch() {
   if (_rematchAsked) return;
   _rematchAsked = true;
+
+  // Mode IA : pas de réseau, relancer directement
+  if (G.aiEnabled) {
+    doRematch();
+    return;
+  }
+
   var btn = document.querySelector('#overlay .btn');
   btn.textContent = '⏳ En attente…';
   btn.disabled = true;
@@ -724,10 +804,23 @@ function doRematch() {
     box.appendChild(sep);
   }
 
-  /* FIX: reset complet pour la revanche */
+  /* Reset complet */
   charChoices = {};
-  G.choices = {};
-  G.players = [];
+  G.choices   = {};
+  G.players   = [];
+  G.lobbyPlayers = [];
+  G.phase     = 'idle';
+  if (typeof clearDialogQueue === 'function') clearDialogQueue();
+
+  // Mode IA : nettoyer le timer et retourner au login pour rechoisir
+  if (G.aiEnabled) {
+    if (typeof AI !== 'undefined') { clearTimeout(AI._timer); AI._timer = null; }
+    G.aiEnabled = false;
+    showScreen('login');
+    return;
+  }
+
+  // Mode multi : retour au lobby
   G.lobbyPlayers.forEach(function(p){ p.ready = false; });
   G.phase = 'lobby';
   renderLobby();

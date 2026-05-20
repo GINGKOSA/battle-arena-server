@@ -278,19 +278,71 @@ const setWaitStatus = t => {
   if (el) el.textContent = t;
 };
 
+/* ── Lobbies publics ── */
+
+async function createLobby(maxSlots, mode) {
+  try {
+    const data = await api('/lobby/create', 'POST', { maxSlots, mode });
+    if (!data.room) { alert('Erreur création lobby'); return; }
+    G.roomId  = data.room;
+    G.isHost  = true;
+    G.mySlot  = 0;
+    G.lobbyPlayers = [{ slot:0, pseudo:G.myPseudo, avatar:G.myProfile?.avatar||null, ready:false }];
+    G.phase   = 'waiting';
+    showRoomWait();
+    await startHost();
+  } catch(e) { console.error('createLobby', e); }
+}
+
+async function joinLobby(room) {
+  try {
+    const data = await api(`/lobby/join/${room}`, 'POST');
+    if (data.accepted && data.room) {
+      // Rejoindre directement
+      G.roomId = data.room;
+      G.isHost = false;
+      G.mySlot = -1;
+      G.phase  = 'waiting';
+      showRoomWait();
+      await startGuest();
+    } else if (data.waiting) {
+      // Attendre que l'hôte accepte (poll /challenged)
+      G.roomId = data.room;
+      G.isHost = false;
+      G.phase  = 'waiting';
+      showRoomWait();
+      setWaitStatus('En attente de l'hôte…');
+      // Le poll challange existant va détecter l'acceptation
+    }
+  } catch(e) { console.error('joinLobby', e); alert('Impossible de rejoindre ce lobby.'); }
+}
+
+async function pollLobbies() {
+  if (!G.myToken) return;
+  try {
+    const list = await api('/lobby/list');
+    renderLobbyList(list);
+  } catch {}
+}
+
 /* ── Discord polls ── */
 let _pollI = null, _chalI = null, _pendingChallenge = null;
 
+let _lobbyI = null;
+
 function startPolls() {
   pollOnline();
-  _pollI = setInterval(pollOnline, 5000);
-  _chalI = setInterval(pollChallenge, 3000);
+  pollLobbies();
+  _pollI  = setInterval(pollOnline,    5000);
+  _chalI  = setInterval(pollChallenge, 3000);
+  _lobbyI = setInterval(pollLobbies,   4000);
 }
 
 function stopPolls() {
   clearInterval(_pollI);
   clearInterval(_chalI);
-  _pollI = null; _chalI = null;
+  clearInterval(_lobbyI);
+  _pollI = null; _chalI = null; _lobbyI = null;
 }
 
 async function pollOnline() {

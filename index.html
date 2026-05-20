@@ -30,6 +30,35 @@
       <button class="btn ice"     onclick="joinAnon()">🔗 Rejoindre</button>
       <button class="btn primary" onclick="createAnon()">⚔️ Créer</button>
     </div>
+
+    <!-- ── Section IA ── -->
+    <div style="width:100%;height:1px;background:var(--border);margin:4px 0"></div>
+    <div style="font-size:12px;color:var(--muted)">ou joue contre l'IA</div>
+
+    <!-- Nb de joueurs -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="ai-count-btn mode-pill active" data-count="2" onclick="aiSelectCount(this)">👤 1v1</button>
+      <button class="ai-count-btn mode-pill"        data-count="3" onclick="aiSelectCount(this)">👥 3 joueurs</button>
+      <button class="ai-count-btn mode-pill"        data-count="4" onclick="aiSelectCount(this)">👥 4 joueurs</button>
+    </div>
+
+    <!-- Mode (visible seulement pour 4 joueurs) -->
+    <div id="ai-mode-row" style="display:none;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="ai-mode-btn mode-pill active" data-mode="ffa" onclick="aiSelectMode(this)">💥 FFA</button>
+      <button class="ai-mode-btn mode-pill"        data-mode="2v2" onclick="aiSelectMode(this)">🛡️ 2v2</button>
+    </div>
+
+
+    <!-- Difficulté + lancer -->
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
+      <select id="ai-level" style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'Exo 2',sans-serif;font-size:13px;color:var(--text);outline:none">
+        <option value="easy">😴 Facile</option>
+        <option value="normal" selected>⚔️ Normal</option>
+        <option value="hard">💀 Difficile</option>
+      </select>
+      <button class="btn primary" onclick="launchVsAI()">🤖 Jouer vs IA</button>
+    </div>
+
   </div>
 
   <!-- ═══ WAITING ROOM ═══ -->
@@ -72,6 +101,28 @@
       <div id="players-empty">Aucun joueur en ligne…</div>
     </div>
 
+    <!-- ═══ LOBBIES PUBLICS ═══ -->
+    <div id="lobbies-panel">
+      <div id="lobbies-header">
+        <div id="lobbies-title">🏟️ Lobbies ouverts</div>
+        <button class="btn small primary" onclick="showCreateLobby()">+ Créer</button>
+      </div>
+      <!-- Formulaire création lobby (caché par défaut) -->
+      <div id="create-lobby-form" style="display:none;padding:12px 18px;border-bottom:1px solid var(--border);gap:10px;flex-direction:column">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="lobby-slots" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'Exo 2',sans-serif;font-size:13px;outline:none">
+            <option value="2">👤 1v1 (2 joueurs)</option>
+            <option value="3">👥 FFA (3 joueurs)</option>
+            <option value="4">👥 FFA/2v2 (4 joueurs)</option>
+          </select>
+          <button class="btn primary" onclick="confirmCreateLobby()">🏟️ Ouvrir le lobby</button>
+          <button class="btn small" onclick="hideCreateLobby()">Annuler</button>
+        </div>
+      </div>
+      <div id="lobbies-list"></div>
+      <div id="lobbies-empty">Aucun lobby ouvert…</div>
+    </div>
+
     <div id="manual-panel">
       <div class="manual-title">Rejoindre par code</div>
       <div class="room-row">
@@ -98,7 +149,7 @@
         <div id="lobby-modes"></div>
         <div id="lobby-2v2-opts">
           PV :
-          <select onchange="G.teamHPMode=this.value">
+          <select id="teamhp-select" onchange="G.teamHPMode=this.value; if(typeof renderHPOverlay==='function' && G.phase==='fight') renderHPOverlay();">
             <option value="individual">Individuels</option>
             <option value="shared">Partagés par équipe</option>
           </select>
@@ -114,63 +165,75 @@
       <div id="char-cards"></div>
     </div>
 
-    <!-- ═══════════════════════════════════════
+    <!-- ═══════════════════════════════════
          BATTLE AREA — New 3DS XL FRAME
-    ════════════════════════════════════════ -->
+         L'image est en background-image CSS
+         sur #ds-frame (padding-bottom trick)
+    ══════════════════════════════════════ -->
     <div id="battle-area">
-
-      <!-- 3DS chassis wrapper -->
       <div id="ds-frame">
-        <img id="ds-img" src="Images/New_3DS_XL.png" alt="New 3DS XL" draggable="false"/>
+        <!-- Image 3DS : on essaie plusieurs chemins selon la structure du repo -->
+        <img id="ds-img" src="Images/New_3DS_XL.png"
+          onerror="
+            const paths=['Images/New_3DS_XL.png','images/New_3DS_XL.png','New_3DS_XL.png','img/New_3DS_XL.png'];
+            let i=0;
+            const t=setInterval(()=>{
+              i++;if(i>=paths.length){clearInterval(t);return;}
+              this.src=paths[i];
+            },50);
+          "
+          alt="" draggable="false"
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;z-index:0"/>
 
-        <!-- TOP SCREEN — Three.js scene -->
+        <!-- TOP SCREEN : scène Three.js -->
         <div id="top-screen">
           <canvas id="battle-canvas"></canvas>
           <div id="overlay">
             <div id="overlay-text"></div>
             <button class="btn" onclick="askRematch()">↺ Rejouer</button>
           </div>
+          <!-- Boîte de dialogue style Pokémon, en bas de l'écran du haut -->
+          <div id="pkm-dialog-box">
+            <div id="pkm-dialog-text">Que doit faire <span id="pkm-my-name">…</span> ?</div>
+          </div>
         </div>
 
-        <!-- BOTTOM SCREEN — actions + chat -->
+        <!-- BOTTOM SCREEN : style Pokémon DS -->
         <div id="bottom-screen">
 
-          <!-- Tab bar -->
-          <div id="ds-tabs">
-            <button class="ds-tab active" onclick="switchTab('actions')">⚔️ Actions</button>
-            <button class="ds-tab" onclick="switchTab('log')">📜 Log</button>
-            <button class="ds-tab" onclick="switchTab('chat')">💬 Chat</button>
-          </div>
-
-          <!-- Actions tab -->
-          <div id="tab-actions" class="ds-tabcontent active">
-            <div id="actions-grid" class="actions"></div>
+          <!-- Grille 4 attaques -->
+          <div id="pkm-move-grid">
+            <div id="actions-grid"></div>
             <div id="target-picker"></div>
             <div id="waiting-action">
-              <span class="dot" style="display:inline-block;margin-right:6px"></span>En attente des autres…
+              <span class="dot" style="display:inline-block;margin-right:5px"></span>En attente…
             </div>
           </div>
 
-          <!-- Combat log tab -->
-          <div id="tab-log" class="ds-tabcontent">
-            <div id="combat-log-messages"></div>
-          </div>
-
-          <!-- Chat tab -->
-          <div id="tab-chat" class="ds-tabcontent">
-            <div id="chat-messages">
-              <div class="chat-msg system">Que le combat commence !</div>
+          <!-- Log + Chat compacts -->
+          <div id="pkm-sub-area">
+            <div id="pkm-tabs">
+              <button class="pkm-tab active" onclick="pkmTab(this,'log')">📜 Log</button>
+              <button class="pkm-tab"        onclick="pkmTab(this,'chat')">💬 Chat</button>
             </div>
-            <div id="chat-input-row">
-              <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
-                onkeydown="if(event.key==='Enter')sendChat()"/>
-              <button id="chat-send" onclick="sendChat()">➤</button>
+            <div id="pkm-tab-log" class="pkm-tabcontent active">
+              <div id="combat-log-messages"></div>
+            </div>
+            <div id="pkm-tab-chat" class="pkm-tabcontent">
+              <div id="chat-messages">
+                <div class="chat-msg system">Que le combat commence !</div>
+              </div>
+              <div id="chat-input-row">
+                <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
+                  onkeydown="if(event.key==='Enter')sendChat()"/>
+                <button id="chat-send" onclick="sendChat()">➤</button>
+              </div>
             </div>
           </div>
 
         </div><!-- /bottom-screen -->
-      </div><!-- /ds-frame -->
 
+      </div><!-- /ds-frame -->
     </div><!-- /battle-area -->
 
   </div><!-- /game -->
@@ -184,29 +247,26 @@
 <script src="js/auth.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/scene.js"></script>
+<script src="js/gyro.js"></script>
 <script src="js/combat.js"></script>
+<script src="js/ai.js"></script>
 <script>
-// Tab switcher for bottom screen
-function switchTab(name) {
-  document.querySelectorAll('.ds-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.ds-tabcontent').forEach(c => c.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
-  if (name === 'chat') {
-    const m = document.getElementById('chat-messages');
-    if (m) m.scrollTop = m.scrollHeight;
-  }
-  if (name === 'log') {
-    const l = document.getElementById('combat-log-messages');
-    if (l) l.scrollTop = l.scrollHeight;
-  }
+function pkmTab(btn, name) {
+  document.querySelectorAll('.pkm-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.pkm-tabcontent').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pkm-tab-' + name).classList.add('active');
+  const el = document.getElementById(name === 'chat' ? 'chat-messages' : 'combat-log-messages');
+  if (el) setTimeout(() => el.scrollTop = el.scrollHeight, 20);
 }
 
-// Override addLog to also switch tab indicator
-const _origAddLog = typeof addLog === 'function' ? addLog : null;
+// Met à jour le nom dans la boîte de dialogue
+function updateDialogName() {
+  const el = document.getElementById('pkm-my-name');
+  if (el && G.myPseudo) el.textContent = G.myPseudo.toUpperCase();
+}
 
 initAuth();
 </script>
 </body>
 </html>
-

@@ -7,9 +7,10 @@ const CLIENT_SECRET = process.env.DISCORD_SECRET;
 const REDIRECT_URI  = 'https://battle-arena-server-t781.onrender.com/callback';
 const FRONTEND      = 'https://gingkosa.github.io/battle-arena-server';
 
-const players = {};
-const tokens  = {};
-const sdps    = {};
+const players = {};  // token → player
+const tokens  = {};  // discordId → token
+const sdps    = {};  // key → {sdp, time}
+const lobbies = {};  // roomId → {hostId, hostName, avatar, room, slots, mode, createdAt}
 
 const cors = res => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -44,10 +45,20 @@ const rand     = (n = 16) => Math.random().toString(36).slice(2).padEnd(n, '0').
 const randRoom = () => Array.from({length:4}, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
 const getPlayer = req => { const t = (req.headers.authorization || '').replace('Bearer ','').trim(); return players[t] || null; };
 
+// Nettoyage périodique
 setInterval(() => {
   const now = Date.now();
-  Object.entries(players).forEach(([t,p]) => { if (now - p.lastSeen > 45000) { delete tokens[p.id]; delete players[t]; } });
-  Object.entries(sdps).forEach(([k,v])    => { if (now - v.time    > 120000) delete sdps[k]; });
+  Object.entries(players).forEach(([t,p]) => {
+    if (now - p.lastSeen > 45000) {
+      // Fermer le lobby de ce joueur s'il en avait un
+      Object.keys(lobbies).forEach(r => { if (lobbies[r].hostId === p.id) delete lobbies[r]; });
+      delete tokens[p.id];
+      delete players[t];
+    }
+  });
+  Object.entries(sdps).forEach(([k,v]) => { if (now - v.time > 120000) delete sdps[k]; });
+  // Nettoyer les vieux lobbies (> 30 min)
+  Object.entries(lobbies).forEach(([r,l]) => { if (now - l.createdAt > 1800000) delete lobbies[r]; });
 }, 15000);
 
 http.createServer(async (req, res) => {
@@ -77,7 +88,7 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  /* ── API ── */
+  /* ── API joueurs ── */
   if (p === '/me') {
     const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
     me.lastSeen = Date.now(); json(res,{id:me.id,username:me.username,avatar:me.avatar}); return;
@@ -86,9 +97,85 @@ http.createServer(async (req, res) => {
   if (p === '/online') {
     const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
     me.lastSeen = Date.now();
-    json(res, Object.values(players).filter(x=>x.id!==me.id).map(x=>({id:x.id,username:x.username,avatar:x.avatar,busy:!!x.challenge}))); return;
+    json(res, Object.values(players)
+      .filter(x => x.id !== me.id)
+      .map(x => ({ id:x.id, username:x.username, avatar:x.avatar, busy:!!x.challenge }))
+    ); return;
   }
 
+  /* ── API Lobbies ── */
+
+  // Créer un lobby public
+  if (p === '/lobby/create' && req.method === 'POST') {
+    const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
+    const body = JSON.parse(await readBody(req) || '{}');
+    // Fermer l'ancien lobby de cet hôte s'il existe
+    Object.keys(lobbies).forEach(r => { if (lobbies[r].hostId === me.id) delete lobbies[r]; });
+    const room = randRoom();
+    lobbies[room] = {
+      hostId:    me.id,
+      hostName:  me.username,
+      avatar:    me.avatar,
+      room,
+      maxSlots:  body.maxSlots  || 2,
+      mode:      body.mode      || '1v1',
+      players:   [me.id],
+      createdAt: Date.now(),
+    };
+    me.lobby = room;
+    json(res, { room }); return;
+  }
+
+  // Lister les lobbies ouverts
+  if (p === '/lobby/list') {
+    const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
+    me.lastSeen = Date.now();
+    const open = Object.values(lobbies)
+      .filter(l => l.hostId !== me.id && l.players.length < l.maxSlots)
+      .map(l => ({
+        room:      l.room,
+        hostName:  l.hostName,
+        avatar:    l.avatar,
+        mode:      l.mode,
+        slots:     l.players.length,
+        maxSlots:  l.maxSlots,
+      }));
+    json(res, open); return;
+  }
+
+  // Rejoindre un lobby (envoie un challenge à l'hôte)
+  if (p.startsWith('/lobby/join/') && req.method === 'POST') {
+    const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
+    const room   = p.split('/')[3];
+    const lobby  = lobbies[room];
+    if (!lobby) { json(res,{error:'lobby_not_found'},404); return; }
+    if (lobby.players.length >= lobby.maxSlots) { json(res,{error:'lobby_full'},400); return; }
+    // Envoyer un challenge auto à l'hôte
+    const ht = tokens[lobby.hostId];
+    if (!ht || !players[ht]) { json(res,{error:'host_offline'},404); return; }
+    const host = players[ht];
+    // Si l'hôte a déjà reçu ce challenge → accepter directement
+    if (host.challenge?.fromId === me.id) {
+      const r = lobby.room;
+      host.challenge   = { accepted:true, room:r, isHost:true };
+      const myChallenge = { accepted:true, room:r, isHost:false };
+      lobby.players.push(me.id);
+      json(res, myChallenge); return;
+    }
+    // Sinon notifier l'hôte
+    host.challenge = { from:me.username, fromId:me.id, avatar:me.avatar, lobbyRoom:room };
+    json(res, { waiting:true, room }); return;
+  }
+
+  // Fermer son lobby
+  if (p === '/lobby/close' && req.method === 'POST') {
+    const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
+    Object.keys(lobbies).forEach(r => { if (lobbies[r].hostId === me.id) delete lobbies[r]; });
+    me.lobby = null;
+    json(res, {ok:true}); return;
+  }
+
+  /* ── Challenge (gardé pour compat) ── */
   if (p.startsWith('/challenge/') && req.method==='POST') {
     const me = getPlayer(req); if (!me) { json(res,{error:'unauthorized'},401); return; }
     const tid = p.split('/')[2], tt = tokens[tid];
@@ -96,7 +183,7 @@ http.createServer(async (req, res) => {
     const target = players[tt];
     if (target.challenge?.fromId === me.id) {
       const room = randRoom();
-      me.challenge = {accepted:true,room,isHost:true};
+      me.challenge     = {accepted:true,room,isHost:true};
       target.challenge = {accepted:true,room,isHost:false};
       json(res,{ok:true}); return;
     }
@@ -112,7 +199,8 @@ http.createServer(async (req, res) => {
   if (p === '/accept' && req.method==='POST') {
     const me = getPlayer(req); if (!me?.challenge) { json(res,{error:'no_challenge'},400); return; }
     if (me.challenge.accepted) { const r={room:me.challenge.room,isHost:me.challenge.isHost}; me.challenge=null; json(res,r); return; }
-    const room = randRoom(), ct = tokens[me.challenge.fromId];
+    const room = me.challenge.lobbyRoom || randRoom();
+    const ct = tokens[me.challenge.fromId];
     if (ct&&players[ct]) players[ct].challenge = {accepted:true,room,isHost:true};
     me.challenge=null; json(res,{room,isHost:false}); return;
   }

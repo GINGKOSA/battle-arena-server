@@ -91,8 +91,18 @@ function addChatMsg(text, isMe, slot) {
      (écran du bas) pour relecture.
 ══════════════════════════════════════════════════ */
 
-let _dialogQueue = [];   // file d'attente des messages
-let _dialogBusy  = false; // typewriter en cours ?
+let _dialogQueue  = [];    // file d'attente des messages
+let _dialogBusy   = false;  // typewriter en cours ?
+let _dialogIV     = null;   // interval du typewriter courant
+let _dialogTimeout = null;  // timeout entre messages
+
+/* Vider immédiatement la queue (ex: nouveau round) */
+function clearDialogQueue() {
+  _dialogQueue = [];
+  _dialogBusy  = false;
+  if (_dialogIV)      { clearInterval(_dialogIV);  _dialogIV = null; }
+  if (_dialogTimeout) { clearTimeout(_dialogTimeout); _dialogTimeout = null; }
+}
 
 function addLog(text, type = 'system') {
   // 1. Archiver dans le log du bas (historique)
@@ -112,7 +122,11 @@ function addLog(text, type = 'system') {
     box.scrollTop = box.scrollHeight;
   }
 
-  // 2. Afficher dans la boîte de dialogue (écran du haut)
+  // 2. Ne pas afficher les messages "prépare..." dans la boîte de dialogue
+  //    → ils spoilent les intentions avant la résolution du round
+  if (text.includes('prépare')) return;
+
+  // 3. Afficher dans la boîte de dialogue (écran du haut)
   _dialogQueue.push({ text, type });
   if (!_dialogBusy) _nextDialog();
 }
@@ -125,21 +139,73 @@ function _nextDialog() {
   const el = document.getElementById('pkm-dialog-text');
   if (!el) { _nextDialog(); return; }
 
-  // Couleur selon le type
   const color = type === 'me' ? '#cc3300' : type === 'them' ? '#0055aa' : '#1a1a1a';
   el.style.color = color;
   el.textContent = '';
 
   // Typewriter lettre par lettre
+  // Vitesse adaptée : plus rapide si la queue s'allonge
   let i = 0;
-  const speed = Math.max(18, Math.min(40, 1200 / text.length)); // adaptatif
-  const iv = setInterval(() => {
+  const qLen = _dialogQueue.length;
+  const speed = qLen > 2 ? 8 : qLen > 0 ? 14 : Math.max(20, Math.min(35, 900 / text.length));
+  _dialogIV = setInterval(() => {
     el.textContent += text[i];
     i++;
     if (i >= text.length) {
-      clearInterval(iv);
-      // Pause avant le prochain message
-      setTimeout(_nextDialog, text.length > 40 ? 1800 : 1200);
+      clearInterval(_dialogIV);
+      _dialogIV = null;
+      // Pause avant le prochain message — réduite si queue longue
+      const pause = _dialogQueue.length > 2 ? 300
+                  : _dialogQueue.length > 0  ? 600
+                  : text.length > 40         ? 1200 : 900;
+      _dialogTimeout = setTimeout(_nextDialog, pause);
     }
   }, speed);
+}
+
+/* ══════════════════════════════════════════════════
+   LOBBIES PUBLICS
+══════════════════════════════════════════════════ */
+function showCreateLobby() {
+  const f = document.getElementById('create-lobby-form');
+  if (f) f.style.display = 'flex';
+}
+function hideCreateLobby() {
+  const f = document.getElementById('create-lobby-form');
+  if (f) f.style.display = 'none';
+}
+
+function confirmCreateLobby() {
+  const slots = +document.getElementById('lobby-slots').value;
+  const mode  = slots === 2 ? '1v1' : 'ffa';
+  hideCreateLobby();
+  createLobby(slots, mode);
+}
+
+function renderLobbyList(list) {
+  const el    = document.getElementById('lobbies-list');
+  const empty = document.getElementById('lobbies-empty');
+  if (!el) return;
+
+  if (!list || !list.length) {
+    el.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  el.innerHTML = '';
+
+  list.forEach(l => {
+    const row = document.createElement('div');
+    row.className = 'lobby-row';
+    row.innerHTML = `
+      <img class="player-avatar" src="${l.avatar || ''}" alt=""
+        onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/>
+      <div style="flex:1">
+        <div class="player-name">${l.hostName}</div>
+        <div style="font-size:11px;color:var(--muted)">${l.mode.toUpperCase()} · ${l.slots}/${l.maxSlots} joueurs</div>
+      </div>
+      <button class="btn small primary" onclick="joinLobby('${l.room}')">🔗 Rejoindre</button>`;
+    el.appendChild(row);
+  });
 }

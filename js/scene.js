@@ -191,7 +191,7 @@ function buildChars() {
     //   3 ennemis : triangle — 1 au fond-centre, 2 devant gauche+droite
     // [x, y, z, scale, rotY]  — tous tournés vers le centre (0.5, 0.5)
     const enemyLayouts = {
-      1: [[ 3.0,  0,    1.5, 1.00, -2.225]],
+      1: [[ 2.5,  0,    3.2, 1.00,  -2.504]],
       2: [
         [-1.5,  0,   -1.2, 1.00,  0.695],
         [ 3.0,  0,   -1.0, 1.00, -0.824],
@@ -199,7 +199,7 @@ function buildChars() {
       3: [
         [-1.5,  0,   -1.2, 1.00,  0.695],   // haut-gauche
         [ 3.0,  0,   -1.0, 1.00, -0.824],   // haut-droite
-        [ 3.0,  0,    1.5, 1.00, -2.225],   // droite-bas
+        [ 2.5,  0,    3.2, 1.00,  -2.504],   // droite-bas
       ],
     };
 
@@ -309,50 +309,99 @@ function renderHPOverlay() {
   });
 
   const GAP = '3px';
-  const W   = '47%'; // largeur de chaque carte (~moitié de l'écran)
+  const W   = '47%';
 
-  // ── Moi → bas-gauche ──
-  const meP = G.players.find(p => p.slot === G.mySlot);
-  if (meP) box.appendChild(makeHPCard(meP, true,
-    `left:3%;bottom:28%;width:${W};`));
+  const meP      = G.players.find(p => p.slot === G.mySlot);
+  const teammate  = G.mode === '2v2'
+    ? G.players.find(p => p.slot !== G.mySlot && p.team === myTeam)
+    : null;
 
-  const eCount = enemies.length;
+  if (G.mode === '2v2' && G.teamHPMode === 'shared') {
+    // ── PV PARTAGÉS : une carte par équipe (somme des HP) ──
+    const teamA = G.players.filter(p => p.team === 0);
+    const teamB = G.players.filter(p => p.team === 1);
 
-  if (eCount === 1) {
-    // 1 ennemi → haut-droite
-    box.appendChild(makeHPCard(enemies[0], false,
-      `right:3%;top:3%;width:${W};`));
+    const makeTeamCard = (players, isMyTeam, posStyle) => {
+      const totalHP  = players.reduce((s, p) => s + p.hp, 0);
+      const totalMax = players.reduce((s, p) => s + p.maxHP, 0);
+      const names    = players.map(p => p.pseudo.slice(0,6).toUpperCase()).join(' & ');
+      const pct      = Math.max(0, totalHP) / totalMax;
+      const barC     = pct > 0.5 ? '#20c060' : pct > 0.25 ? '#f0c000' : '#e03020';
+      const side     = isMyTeam ? 'ally' : 'enemy';
 
-  } else if (eCount === 2) {
-    // 2 ennemis → haut-gauche et haut-droite
-    // Rangée flex en haut, width égale avec gap
-    const row = document.createElement('div');
-    row.style.cssText = `position:absolute;top:3%;left:3%;right:3%;display:flex;gap:${GAP};`;
-    enemies.forEach(p => {
-      const c = makeHPCard(p, false, '');
+      const card = document.createElement('div');
+      // ID basé sur l'équipe pour updateAllSprites
+      card.id = 'hp-team-' + players[0].team;
+      if (posStyle) card.style.cssText = 'position:absolute;' + posStyle;
+      card.innerHTML = `
+        <div class="pkm-hp-box ${side}">
+          <div class="pkm-name-row">
+            <span class="pkm-name">${names}</span>
+            <span class="pkm-lv">${totalHP}/${totalMax}</span>
+          </div>
+          <div class="pkm-bar-row">
+            <span class="pkm-hp-label">PV</span>
+            <div class="pkm-bar-bg">
+              <div class="pkm-bar-fill" id="bar-team-${players[0].team}"
+                style="width:${pct*100}%;background:${barC}"></div>
+            </div>
+          </div>
+        </div>`;
+      return card;
+    };
+
+    const myTeamPlayers  = myTeam === 0 ? teamA : teamB;
+    const foeTeamPlayers = myTeam === 0 ? teamB : teamA;
+    if (myTeamPlayers.length)  box.appendChild(makeTeamCard(myTeamPlayers,  true,  `left:3%;bottom:28%;width:${W};`));
+    if (foeTeamPlayers.length) box.appendChild(makeTeamCard(foeTeamPlayers, false, `right:3%;top:3%;width:${W};`));
+
+  } else if (teammate) {
+    // ── PV INDIVIDUELS 2v2 : moi + coéquipier en bas ──
+    const rowBot = document.createElement('div');
+    rowBot.style.cssText = `position:absolute;bottom:28%;left:3%;right:3%;display:flex;gap:${GAP};`;
+    [meP, teammate].filter(Boolean).forEach((p, i) => {
+      const c = makeHPCard(p, true, '');
+      if (i === 1) c.querySelector('.pkm-hp-box').classList.replace('ally', 'ally-team');
       c.style.cssText = 'flex:1;min-width:0;';
-      row.appendChild(c);
+      rowBot.appendChild(c);
     });
-    box.appendChild(row);
-
+    box.appendChild(rowBot);
   } else {
-    // 3 ennemis : positions dans l'arène
-    //   ennemi[0] → haut-gauche
-    //   ennemi[1] → haut-droite
-    //   ennemi[2] → bas-droite (celui qui est à droite-bas dans l'arène)
-    // Rangée du haut : enemies[0] et enemies[1]
-    const rowTop = document.createElement('div');
-    rowTop.style.cssText = `position:absolute;top:3%;left:3%;right:3%;display:flex;gap:${GAP};`;
-    [enemies[0], enemies[1]].forEach(p => {
-      const c = makeHPCard(p, false, '');
-      c.style.cssText = 'flex:1;min-width:0;';
-      rowTop.appendChild(c);
-    });
-    box.appendChild(rowTop);
+    // FFA : moi seul en bas-gauche
+    if (meP) box.appendChild(makeHPCard(meP, true, `left:3%;bottom:28%;width:${W};`));
+  }
 
-    // Ennemi bas-droite (celui à droite dans l'arène)
-    box.appendChild(makeHPCard(enemies[2], false,
-      `right:3%;bottom:28%;width:${W};`));
+  // En 2v2 shared : une seule carte pour toute l'équipe ennemie
+  if (!(G.mode === '2v2' && G.teamHPMode === 'shared')) {
+    const eCount = enemies.length;
+
+    if (eCount === 1) {
+      box.appendChild(makeHPCard(enemies[0], false,
+        `right:3%;top:3%;width:${W};`));
+
+    } else if (eCount === 2) {
+      const row = document.createElement('div');
+      row.style.cssText = `position:absolute;top:3%;left:3%;right:3%;display:flex;gap:${GAP};`;
+      enemies.forEach(p => {
+        const c = makeHPCard(p, false, '');
+        c.style.cssText = 'flex:1;min-width:0;';
+        row.appendChild(c);
+      });
+      box.appendChild(row);
+
+    } else {
+      // 3 ennemis : 2 en haut, 1 en bas-droite
+      const rowTop = document.createElement('div');
+      rowTop.style.cssText = `position:absolute;top:3%;left:3%;right:3%;display:flex;gap:${GAP};`;
+      [enemies[0], enemies[1]].forEach(p => {
+        const c = makeHPCard(p, false, '');
+        c.style.cssText = 'flex:1;min-width:0;';
+        rowTop.appendChild(c);
+      });
+      box.appendChild(rowTop);
+      box.appendChild(makeHPCard(enemies[2], false,
+        `right:3%;bottom:28%;width:${W};`));
+    }
   }
 }
 
@@ -384,6 +433,37 @@ function makeHPCard(p, isAlly, posStyle) {
 
 /* ── Mise à jour HP ── */
 function updateAllSprites() {
+  if (G.mode === '2v2' && G.teamHPMode === 'shared') {
+    // Si les barres d'équipe n'existent pas encore, recréer l'overlay
+    if (!document.getElementById('bar-team-0')) {
+      renderHPOverlay();
+      return;
+    }
+    // Mettre à jour les barres d'équipe
+    [0, 1].forEach(team => {
+      const players  = G.players.filter(p => p.team === team);
+      const totalHP  = players.reduce((s, p) => s + p.hp, 0);
+      const totalMax = players.reduce((s, p) => s + p.maxHP, 0);
+      const pct      = Math.max(0, totalHP) / totalMax;
+      const barC     = pct > 0.5 ? '#20c060' : pct > 0.25 ? '#f0c000' : '#e03020';
+      const bar      = document.getElementById('bar-team-' + team);
+      const card     = document.getElementById('hp-team-' + team);
+      if (bar) { bar.style.width = (pct * 100) + '%'; bar.style.background = barC; }
+      if (card) {
+        const lv = card.querySelector('.pkm-lv');
+        if (lv) lv.textContent = totalHP + '/' + totalMax;
+        if (players.every(p => !p.alive)) card.style.opacity = '0.35';
+      }
+    });
+    return;
+  }
+
+  // Barres individuelles — si on voit des cartes d'équipe au lieu, recréer
+  if (document.getElementById('bar-team-0') && G.teamHPMode !== 'shared') {
+    renderHPOverlay();
+    return;
+  }
+
   G.players.forEach(p => {
     const bar  = document.getElementById('bar-' + p.slot);
     const card = document.getElementById('hp-card-' + p.slot);
@@ -392,10 +472,8 @@ function updateAllSprites() {
     const barC = pct > 0.5 ? '#20c060' : pct > 0.25 ? '#f0c000' : '#e03020';
     bar.style.width      = (pct * 100) + '%';
     bar.style.background = barC;
-    // Met à jour le "pseudo hp/max" dans pkm-lv
     const lv = card ? card.querySelector('.pkm-lv') : null;
     if (lv) lv.textContent = p.hp + '/' + p.maxHP;
-    // Grise la carte si mort
     if (!p.alive && card) card.style.opacity = '0.35';
   });
 }
@@ -446,5 +524,4 @@ function animate3() {
   });
 
   r3.render(s3, cam3);
-  }
-
+}
