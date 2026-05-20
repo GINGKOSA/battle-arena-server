@@ -378,7 +378,10 @@ function renderActionPanel() {
   });
 
   document.getElementById('waiting-action').style.display = 'none';
-  document.getElementById('target-picker').style.display  = 'none';
+  var tp = document.getElementById('target-picker');
+  if (tp) tp.classList.remove('visible');
+  var ag = document.getElementById('actions-grid');
+  if (ag) ag.style.display = '';
   document.querySelectorAll('#actions-grid .action-btn').forEach(function(b){ b.disabled = false; });
 
   // Mode IA : déclencher le tour des bots
@@ -447,35 +450,49 @@ function pickAction(move) {
 }
 
 function showTargetPicker(move, targets, me) {
+  // Cacher la grille d'attaques, afficher le picker en 2×2
+  var grid   = document.getElementById('actions-grid');
   var picker = document.getElementById('target-picker');
-  picker.innerHTML = '';
+  if (grid)   grid.style.display   = 'none';
+  if (picker) picker.innerHTML = '';
 
-  var label = document.createElement('div');
-  label.className   = 'picker-label';
-  label.textContent = move.heal ? '💚 Qui soigner ?' : '🎯 Qui attaquer ?';
-  picker.appendChild(label);
+  // Remplir jusqu'à 4 slots pour avoir toujours une grille 2×2
+  // Les slots vides sont des boutons transparents/disabled
+  var slots = [null, null, null, null];
+  targets.forEach(function(p, i) { if (i < 4) slots[i] = p; });
 
-  targets.forEach(function(p) {
+  slots.forEach(function(p) {
     var btn = document.createElement('button');
     btn.className = 'target-btn';
 
-    var teamLabel = '';
+    if (!p) {
+      // Cellule vide
+      btn.disabled = true;
+      btn.style.background = 'transparent';
+      btn.style.border = '2px dashed rgba(0,0,0,0.1)';
+      btn.style.boxShadow = 'none';
+      picker.appendChild(btn);
+      return;
+    }
+
+    var isSelf = p.slot === me.slot;
+    var teamBadge = '';
     if (G.mode === '2v2') {
-      teamLabel = p.team === 0
+      teamBadge = p.team === 0
         ? '<span class="team-badge fire">Équipe A</span>'
         : '<span class="team-badge ice">Équipe B</span>';
     }
 
-    var isSelf = p.slot === me.slot;
     btn.innerHTML =
       '<span class="target-dot" style="background:' + SLOT_CLR[p.slot] + '"></span>' +
-      '<span class="target-name">' + (isSelf ? '🛡️ ' + p.pseudo + ' (moi)' : p.pseudo) + '</span>' +
-      teamLabel +
+      '<span class="target-name">' + (isSelf ? '🛡️ ' + p.pseudo : p.pseudo) + '</span>' +
+      teamBadge +
       '<span class="target-hp">' + p.hp + '/' + p.maxHP + ' PV</span>';
 
-    btn.onclick = (function(slot){
+    btn.onclick = (function(slot) {
       return function() {
-        picker.style.display = 'none';
+        picker.classList.remove('visible');
+        if (grid) grid.style.display = '';
         submitAction(move, slot);
       };
     })(p.slot);
@@ -483,7 +500,7 @@ function showTargetPicker(move, targets, me) {
     picker.appendChild(btn);
   });
 
-  picker.style.display = 'flex';
+  picker.classList.add('visible');
 }
 
 function submitAction(move, targetSlot) {

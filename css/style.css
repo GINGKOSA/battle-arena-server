@@ -414,135 +414,129 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
   font-weight: 600;
 }
 
-/* ── Bottom screen layout Pokémon ── */
+/* ── Bottom screen layout ── */
 #bottom-screen {
   display: flex;
   flex-direction: column;
-  background: #e8e4c8;  /* beige Pokémon DS */
+  background: #d8d4b8;
+  position: relative;
 }
 
-/* Boîte de dialogue (haut) */
-#pkm-dialog-box {
-  background: #f0ece0;
-  border-bottom: 2px solid #bbb89a;
-  padding: 5px 10px;
-  flex-shrink: 0;
-  min-height: 22%;
-  display: flex;
-  align-items: center;
-}
-#pkm-dialog-text {
-  font-family: 'Exo 2', sans-serif;
-  font-size: clamp(8px, 1.4vw, 13px);
-  color: #1a1a1a;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-/* Grille des 4 attaques (milieu) */
+/* Grille principale — prend tout l'espace disponible */
 #pkm-move-grid {
   flex: 1;
-  background: #d8d4b8;
-  border-top: 2px solid #bbb89a;
-  border-bottom: 2px solid #bbb89a;
-  padding: 5px;
+  padding: 6px;
+  padding-top: 26px; /* espace pour les boutons burger */
   display: flex;
   flex-direction: column;
-  gap: 3px;
   overflow: hidden;
 }
 
-/* Les 4 boutons en grille 2×2 style Pokémon */
+/* Grille 2×2 — remplit tout l'espace */
 #actions-grid.actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  flex-shrink: 0;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
+  flex: 1;
+  height: 100%;
 }
 
-/* Bouton attaque style Pokémon */
+/* Bouton attaque — grand, prend toute la cellule */
 .action-btn {
-  padding: 5px 8px;
+  width: 100%;
+  height: 100%;
+  padding: 4px 6px;
   background: #f5f2e0;
   border: 2px solid #8a8870;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #1a1a1a;
   font-family: 'Exo 2', sans-serif;
-  font-size: clamp(8px, 1.3vw, 12px);
+  font-size: clamp(9px, 1.6vw, 14px);
   font-weight: 700;
   cursor: pointer;
-  transition: background .1s, transform .1s;
+  transition: background .1s, transform .08s, border-color .1s;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  line-height: 1.2;
-  box-shadow: 1px 1px 0 #8a8870;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  box-shadow: 2px 2px 0 #8a8870;
+  line-height: 1.3;
 }
 .action-btn:hover:not(:disabled) {
   background: #fffce8;
   border-color: #ff5522;
-  transform: scale(1.03);
+  transform: scale(1.02);
+  box-shadow: 2px 2px 0 #ff5522;
 }
 .action-btn:active:not(:disabled) { transform: scale(.97); }
-.action-btn:disabled { opacity: .4; cursor: default; }
+.action-btn:disabled { opacity: .4; cursor: default; transform: none; }
 .action-btn .dmg {
-  margin-left: auto;
-  font-size: clamp(7px,1vw,9px);
+  font-size: clamp(8px, 1.1vw, 11px);
   color: #666;
-  white-space: nowrap;
   font-weight: 600;
 }
-
-/* Target picker style Pokémon */
-#target-picker {
-  display: none;
-  flex-direction: column;
-  gap: 3px;
-  background: #ede9d0;
-  border: 2px solid #8a8870;
-  border-radius: 6px;
-  padding: 5px;
-}
-.picker-label {
-  font-size: 9px;
-  color: #444;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-.target-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 8px;
-  background: #f5f2e0;
-  border: 2px solid #8a8870;
-  border-radius: 4px;
-  color: #1a1a1a;
-  font-family: 'Exo 2', sans-serif;
-  font-size: clamp(8px,1.2vw,11px);
-  font-weight: 700;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-}
-.target-btn:hover { background: #fffce8; border-color: #ff5522; }
-.target-dot  { width:7px;height:7px;border-radius:50%;flex-shrink:0 }
-.target-name { flex:1;font-weight:700 }
-.target-hp   { font-size:9px;color:#555;white-space:nowrap }
-.team-badge  { font-size:8px;padding:1px 5px;border-radius:99px;font-weight:700 }
-.team-badge.fire { background:rgba(255,85,34,.15);color:#cc3300;border:1px solid rgba(255,85,34,.4) }
-.team-badge.ice  { background:rgba(34,170,255,.15);color:#0055aa;border:1px solid rgba(34,170,255,.4) }
 
 /* Waiting */
 #waiting-action {
   display: none;
-  text-align: center;
-  padding: 6px;
-  font-size: clamp(8px,1.2vw,11px);
+  position: absolute;
+  inset: 0;
+  top: 26px;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(9px,1.4vw,13px);
   color: #555;
-  font-weight: 600;
-  flex-shrink: 0;
+  font-weight: 700;
+  background: rgba(216,212,184,0.92);
+  z-index: 5;
 }
+
+/* ── Target picker — remplace la grille 2×2 ── */
+#target-picker {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
+  flex: 1;
+  height: 100%;
+}
+/* Quand visible : même grille que les attaques */
+#target-picker.visible {
+  display: grid;
+}
+
+.target-btn {
+  width: 100%;
+  height: 100%;
+  padding: 4px 6px;
+  background: #f5f2e0;
+  border: 2px solid #8a8870;
+  border-radius: 6px;
+  color: #1a1a1a;
+  font-family: 'Exo 2', sans-serif;
+  font-size: clamp(9px,1.5vw,13px);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .1s, border-color .1s, transform .08s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  box-shadow: 2px 2px 0 #8a8870;
+}
+.target-btn:hover { background: #fffce8; border-color: #ff5522; transform: scale(1.02); }
+.target-dot  { width:10px;height:10px;border-radius:50%;flex-shrink:0 }
+.target-name { font-weight:700;font-size:clamp(9px,1.4vw,13px) }
+.target-hp   { font-size:clamp(8px,1.1vw,11px);color:#555 }
+.team-badge  { font-size:9px;padding:1px 6px;border-radius:99px;font-weight:700 }
+.team-badge.fire { background:rgba(255,85,34,.15);color:#cc3300;border:1px solid rgba(255,85,34,.4) }
+.team-badge.ice  { background:rgba(34,170,255,.15);color:#0055aa;border:1px solid rgba(34,170,255,.4) }
+.picker-label { display:none } /* plus besoin du label, les boutons sont évidents */
 
 /* ── Log + chat compacts ── */
 #pkm-sub-area {
@@ -653,3 +647,84 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 .lobby-row{display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border);transition:background .15s}
 .lobby-row:last-child{border-bottom:none}
 .lobby-row:hover{background:var(--panel2)}
+
+/* ══════════════════════════════════════
+   BURGER MENUS — Log & Chat
+   Haut-gauche = Log, Haut-droite = Chat
+   Les panels flottent par-dessus l'écran du bas
+══════════════════════════════════════ */
+
+/* Boutons burger dans les coins de l'écran du bas */
+#burger-log, #burger-chat {
+  position: absolute;
+  top: 3px;
+  z-index: 20;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 5px;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+  line-height: 1;
+  backdrop-filter: blur(4px);
+  transition: background .15s, border-color .15s;
+}
+#burger-log  { left:  3px; }
+#burger-chat { right: 3px; }
+#burger-log:hover,  #burger-chat:hover  { background: rgba(255,85,34,.5); border-color: var(--fire); }
+#burger-log.active, #burger-chat.active { background: rgba(255,85,34,.7); border-color: var(--fire); }
+
+/* Panels flottants */
+.burger-panel {
+  position: absolute;
+  top: 24px;           /* juste sous les boutons */
+  width: 90%;
+  max-height: 70%;
+  background: rgba(10,10,24,0.96);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 19;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+}
+.burger-panel.open { display: flex; }
+
+/* Log → aligné à gauche */
+#burger-panel-log  { left: 3px; }
+/* Chat → aligné à droite */
+#burger-panel-chat { right: 3px; }
+
+.burger-panel-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--fire);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Log messages dans le panel */
+#burger-panel-log #combat-log-messages,
+#burger-panel-chat #chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scroll-behavior: smooth;
+  max-height: 120px;
+}
+
+/* Chat input */
+#burger-panel-chat #chat-input-row {
+  display: flex;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}

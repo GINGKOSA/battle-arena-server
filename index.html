@@ -215,33 +215,36 @@
         <!-- BOTTOM SCREEN : style Pokémon DS -->
         <div id="bottom-screen">
 
+          <!-- Burger Log (haut-gauche) -->
+          <button id="burger-log" onclick="toggleBurger('log')" title="Log">☰</button>
+          <!-- Burger Chat (haut-droite) -->
+          <button id="burger-chat" onclick="toggleBurger('chat')" title="Chat">💬</button>
+
+          <!-- Panel Log (flottant) -->
+          <div id="burger-panel-log" class="burger-panel">
+            <div class="burger-panel-title">📜 Log</div>
+            <div id="combat-log-messages"></div>
+          </div>
+
+          <!-- Panel Chat (flottant) -->
+          <div id="burger-panel-chat" class="burger-panel">
+            <div class="burger-panel-title">💬 Chat</div>
+            <div id="chat-messages">
+              <div class="chat-msg system">Que le combat commence !</div>
+            </div>
+            <div id="chat-input-row">
+              <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
+                onkeydown="if(event.key==='Enter')sendChat()"/>
+              <button id="chat-send" onclick="sendChat()">➤</button>
+            </div>
+          </div>
+
           <!-- Grille 4 attaques -->
           <div id="pkm-move-grid">
             <div id="actions-grid"></div>
             <div id="target-picker"></div>
             <div id="waiting-action">
               <span class="dot" style="display:inline-block;margin-right:5px"></span>En attente…
-            </div>
-          </div>
-
-          <!-- Log + Chat compacts -->
-          <div id="pkm-sub-area">
-            <div id="pkm-tabs">
-              <button class="pkm-tab active" onclick="pkmTab(this,'log')">📜 Log</button>
-              <button class="pkm-tab"        onclick="pkmTab(this,'chat')">💬 Chat</button>
-            </div>
-            <div id="pkm-tab-log" class="pkm-tabcontent active">
-              <div id="combat-log-messages"></div>
-            </div>
-            <div id="pkm-tab-chat" class="pkm-tabcontent">
-              <div id="chat-messages">
-                <div class="chat-msg system">Que le combat commence !</div>
-              </div>
-              <div id="chat-input-row">
-                <input id="chat-input" type="text" placeholder="Message…" maxlength="200"
-                  onkeydown="if(event.key==='Enter')sendChat()"/>
-                <button id="chat-send" onclick="sendChat()">➤</button>
-              </div>
             </div>
           </div>
 
@@ -328,13 +331,20 @@ function launchVsAIFromLobby() {
   else alert('Erreur : module IA non chargé');
 }
 
-function pkmTab(btn, name) {
-  document.querySelectorAll('.pkm-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.pkm-tabcontent').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('pkm-tab-' + name).classList.add('active');
-  const el = document.getElementById(name === 'chat' ? 'chat-messages' : 'combat-log-messages');
-  if (el) setTimeout(() => el.scrollTop = el.scrollHeight, 20);
+function toggleBurger(name) {
+  const panel = document.getElementById('burger-panel-' + name);
+  const btn   = document.getElementById('burger-' + name);
+  // Fermer l'autre panel si ouvert
+  const other = name === 'log' ? 'chat' : 'log';
+  document.getElementById('burger-panel-' + other)?.classList.remove('open');
+  document.getElementById('burger-' + other)?.classList.remove('active');
+  // Toggle ce panel
+  const isOpen = panel.classList.toggle('open');
+  btn.classList.toggle('active', isOpen);
+  if (isOpen) {
+    const msgs = panel.querySelector('#combat-log-messages, #chat-messages');
+    if (msgs) setTimeout(() => msgs.scrollTop = msgs.scrollHeight, 20);
+  }
 }
 
 // Met à jour le nom dans la boîte de dialogue

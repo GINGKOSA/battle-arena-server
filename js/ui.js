@@ -80,6 +80,13 @@ function addChatMsg(text, isMe, slot) {
   }
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
+  // Indiquer visuellement qu'un message est arrivé si le panel est fermé
+  const btn = document.getElementById('burger-chat');
+  if (btn && !document.getElementById('burger-panel-chat')?.classList.contains('open')) {
+    btn.style.borderColor = 'var(--ice)';
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { if(btn) btn.style.borderColor = ''; }, 2000);
+  }
 }
 
 /* ══════════════════════════════════════════════════
@@ -120,6 +127,13 @@ function addLog(text, type = 'system') {
     e.appendChild(t);
     box.appendChild(e);
     box.scrollTop = box.scrollHeight;
+  }
+  // Indiquer visuellement qu'un log est arrivé si le panel est fermé
+  const logBtn = document.getElementById('burger-log');
+  if (logBtn && !document.getElementById('burger-panel-log')?.classList.contains('open')) {
+    logBtn.style.borderColor = 'var(--orange)';
+    clearTimeout(logBtn._t);
+    logBtn._t = setTimeout(() => { if(logBtn) logBtn.style.borderColor = ''; }, 2000);
   }
 
   // 2. Ne pas afficher les messages "prépare..." dans la boîte de dialogue
