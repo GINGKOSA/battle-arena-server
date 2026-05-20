@@ -311,7 +311,7 @@ async function joinLobby(room) {
       G.isHost = false;
       G.phase  = 'waiting';
       showRoomWait();
-      setWaitStatus('En attente de l'hôte…');
+      setWaitStatus('En attente de l\'hôte…');
       // Le poll challange existant va détecter l'acceptation
     }
   } catch(e) { console.error('joinLobby', e); alert('Impossible de rejoindre ce lobby.'); }
