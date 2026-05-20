@@ -119,7 +119,7 @@ function addLog(text, type = 'system') {
     e.className = 'log-entry ' + type;
     const b = document.createElement('span');
     b.className = 'log-badge';
-    b.textContent = type === 'me' ? 'Toi' : type === 'them' ? 'Ennemi' : '•';
+    b.textContent = type === 'me' ? 'Toi' : type === 'ally' ? 'Allié' : type === 'them' ? 'Ennemi' : '•';
     const t = document.createElement('span');
     t.className = 'log-text';
     t.textContent = text;
@@ -153,7 +153,7 @@ function _nextDialog() {
   const el = document.getElementById('pkm-dialog-text');
   if (!el) { _nextDialog(); return; }
 
-  const color = type === 'me' ? '#cc3300' : type === 'them' ? '#0055aa' : '#1a1a1a';
+  const color = type === 'me' ? '#cc3300' : type === 'ally' ? '#2a7a2a' : type === 'them' ? '#0055aa' : '#1a1a1a';
   el.style.color = color;
   el.textContent = '';
 

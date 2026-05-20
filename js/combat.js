@@ -131,6 +131,10 @@ function onMessage(msg) {
         Object.entries(msg.choices).forEach(function(e) {
           charChoices[+e[0]] = e[1];
         });
+        /* FIX: synchroniser le mode et teamHPMode depuis l'hôte avant beginFight
+           pour éviter tout décalage de ciblage (coéquipier attaquable) */
+        if (msg.mode)       G.mode       = msg.mode;
+        if (msg.teamHPMode) G.teamHPMode = msg.teamHPMode;
         beginFight();
       }
       break;
@@ -297,9 +301,10 @@ function _refreshCharStatus() {
 
 function _checkAllChosen() {
   if (Object.keys(charChoices).length >= G.lobbyPlayers.length) {
-    /* FIX: on envoie les choices avec clés string (JSON), les guests
-       les convertiront en number dans onMessage('begin_fight') */
-    broadcast({ type: 'begin_fight', choices: Object.assign({}, charChoices) });
+    /* FIX: inclure mode et teamHPMode pour que les guests synchronisent
+       correctement le mode avant beginFight() → évite le bug coéquipier attaquable */
+    broadcast({ type: 'begin_fight', choices: Object.assign({}, charChoices),
+                mode: G.mode, teamHPMode: G.teamHPMode });
     beginFight();
   }
 }
@@ -314,9 +319,12 @@ function beginFight() {
   document.getElementById('battle-area').style.display = 'flex';
 
   var n = G.lobbyPlayers.length;
-  if (n === 2 && G.mode !== '1v1') G.mode = '1v1';
+  if (n === 2) G.mode = '1v1';
   if (n === 3) G.mode = 'ffa';
-  if (n === 4 && G.mode !== '2v2') G.mode = 'ffa';
+  /* FIX: pour 4 joueurs, respecter le mode choisi dans le lobby (2v2 ou ffa).
+     On ne force FFA que si le mode n'est ni '2v2' ni 'ffa', pour éviter
+     qu'un guest dont G.mode n'est pas encore synchronisé bascule en FFA. */
+  if (n === 4 && G.mode !== '2v2' && G.mode !== 'ffa') G.mode = 'ffa';
 
   console.log('[beginFight] mode=' + G.mode + ' joueurs=' + n + ' mySlot=' + G.mySlot);
 
@@ -361,7 +369,7 @@ function renderActionPanel() {
     var grid = document.getElementById('actions-grid');
     grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">💀 Tu as été éliminé.</div>';
     document.getElementById('waiting-action').style.display = 'none';
-    document.getElementById('target-picker').style.display  = 'none';
+    document.getElementById('target-picker').classList.remove('visible');
     return;
   }
 
@@ -440,7 +448,11 @@ function pickAction(move) {
     if (G.mode === '2v2') {
       targets = alive.filter(function(p){ return p.team !== me.team; });
     } else {
-      targets = alive.filter(function(p){ return p.slot !== me.slot; });
+      /* FIX: en FFA, exclure aussi les joueurs de la même équipe (team non-null)
+         pour éviter qu'un coéquipier soit ciblable si le mode 2v2 a été mal synchronisé */
+      targets = alive.filter(function(p){
+        return p.slot !== me.slot && (me.team === null || p.team !== me.team);
+      });
     }
   }
 
@@ -512,7 +524,7 @@ function submitAction(move, targetSlot) {
   G.choices[G.mySlot] = { move: move, targetSlot: targetSlot };
 
   document.querySelectorAll('#actions-grid .action-btn').forEach(function(b){ b.disabled = true; });
-  document.getElementById('target-picker').style.display  = 'none';
+  document.getElementById('target-picker').classList.remove('visible');
   document.getElementById('waiting-action').style.display = 'flex';
 
   /* FIX: send envoie le move complet tel quel — les propriétés heal/dmg/acc
@@ -666,6 +678,17 @@ async function applyOne(atk, tgt, move, hit) {
   if (!tgt) return;
   var isMe = atk.slot === G.mySlot;
 
+  /* FIX: en 2v2, distinguer coéquipier (ally) et ennemi (them) pour le log */
+  var logType;
+  if (isMe) {
+    logType = 'me';
+  } else if (G.mode === '2v2' && atk.team !== null && atk.team !== undefined) {
+    var me = G.players.find(function(p){ return p.slot === G.mySlot; });
+    logType = (me && atk.team === me.team) ? 'ally' : 'them';
+  } else {
+    logType = 'them';
+  }
+
   if (move.heal) {
     if (G.mode === '2v2' && G.teamHPMode === 'shared') {
       // Soin partagé : soigne toute l'équipe de la cible
@@ -676,11 +699,11 @@ async function applyOne(atk, tgt, move, hit) {
         p.hp = Math.min(p.maxHP, p.hp + g);
         gainTotal += g;
       });
-      addLog(atk.pseudo + ' soigne l\'equipe +' + gainTotal + ' PV 💚', isMe ? 'me' : 'them');
+      addLog(atk.pseudo + ' soigne l\'equipe +' + gainTotal + ' PV 💚', logType);
     } else {
       var gain = Math.min(move.heal, tgt.maxHP - tgt.hp);
       tgt.hp = Math.min(tgt.maxHP, tgt.hp + gain);
-      addLog(atk.pseudo + ' soigne ' + tgt.pseudo + ' +' + gain + ' PV 💚', isMe ? 'me' : 'them');
+      addLog(atk.pseudo + ' soigne ' + tgt.pseudo + ' +' + gain + ' PV 💚', logType);
     }
   } else if (hit) {
     if (G.mode === '2v2' && G.teamHPMode === 'shared') {
@@ -693,21 +716,21 @@ async function applyOne(atk, tgt, move, hit) {
         var dmg = Math.min(remaining, p.hp);
         p.hp      = Math.max(0, p.hp - dmg);
         remaining -= dmg;
-        // En shared : ne pas marquer alive=false individuellement
-        // c'est isOver() qui détecte la mort via la somme des HP
+        // FIX: marquer alive=false même en shared pour bloquer les attaques post-mortem
+        if (p.hp === 0) p.alive = false;
         spawnHitParticles(p.slot);
       });
       addLog(atk.pseudo + ' → ' + move.icon + ' ' + move.name + ' → Équipe ' +
-        (tgt.team === 0 ? 'A' : 'B') + ' (' + move.dmg + ' dmg partagés)', isMe ? 'me' : 'them');
+        (tgt.team === 0 ? 'A' : 'B') + ' (' + move.dmg + ' dmg partagés)', logType);
     } else {
       tgt.hp = Math.max(0, tgt.hp - move.dmg);
       if (tgt.hp === 0) tgt.alive = false;
       addLog(atk.pseudo + ' → ' + move.icon + ' ' + move.name + ' → ' + tgt.pseudo +
-        ' (' + move.dmg + ' dmg)', isMe ? 'me' : 'them');
+        ' (' + move.dmg + ' dmg)', logType);
       spawnHitParticles(tgt.slot);
     }
   } else {
-    addLog(atk.pseudo + ' rate ' + move.icon + ' ' + move.name + ' !', isMe ? 'me' : 'them');
+    addLog(atk.pseudo + ' rate ' + move.icon + ' ' + move.name + ' !', logType);
   }
 }
 

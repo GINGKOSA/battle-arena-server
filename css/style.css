@@ -300,6 +300,7 @@ h1{font-family:'Orbitron',sans-serif;font-size:clamp(13px,2.5vw,18px);letter-spa
 .log-badge{font-size:8px;letter-spacing:.05em;text-transform:uppercase;padding:1px 4px;border-radius:99px;font-weight:600;flex-shrink:0}
 .log-entry.me   .log-badge{background:rgba(255,85,34,.18);color:var(--fire);border:1px solid rgba(255,85,34,.3)}
 .log-entry.them .log-badge{background:rgba(34,170,255,.18);color:var(--ice);border:1px solid rgba(34,170,255,.3)}
+.log-entry.ally .log-badge{background:rgba(34,200,80,.18);color:#1a9a40;border:1px solid rgba(34,200,80,.3)}
 .log-entry.system .log-badge{background:rgba(119,119,170,.18);color:var(--muted);border:1px solid rgba(119,119,170,.3)}
 .log-text{color:var(--text);font-size:10px}
 
@@ -490,13 +491,19 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
   z-index: 10;
 }
 
-/* ── Target picker — remplace la grille 2×2 ── */
+/* ── Target picker — se superpose à #actions-grid ── */
 #target-picker {
+  position: absolute;
+  left: 5px; right: 5px;
+  top: 28px; bottom: 5px;
   display: none;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
+  z-index: 5;
 }
-/* Quand visible : les boutons remontent dans la grille pkm-move-grid */
 #target-picker.visible {
-  display: contents;
+  display: grid;
 }
 
 .target-btn {
@@ -547,6 +554,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 .log-badge { font-size:8px;text-transform:uppercase;padding:1px 4px;border-radius:99px;font-weight:700;flex-shrink:0 }
 .log-entry.me    .log-badge { background:rgba(255,85,34,.15);color:#cc3300;border:1px solid rgba(255,85,34,.3) }
 .log-entry.them  .log-badge { background:rgba(34,170,255,.15);color:#0055aa;border:1px solid rgba(34,170,255,.3) }
+.log-entry.ally  .log-badge { background:rgba(34,200,80,.15);color:#1a7a30;border:1px solid rgba(34,200,80,.3) }
 .log-entry.system .log-badge{ background:rgba(0,0,0,.08);color:#555;border:1px solid rgba(0,0,0,.15) }
 .log-text { color:#1a1a1a;font-size:clamp(7px,1vw,10px) }
 
@@ -622,8 +630,8 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
   border: 1px solid rgba(255,255,255,0.15);
   border-radius: 5px;
   color: #fff;
-  font-size: 11px;
-  padding: 2px 6px;
+  font-size: 14px;
+  padding: 6px 11px;
   cursor: pointer;
   line-height: 1;
   backdrop-filter: blur(4px);
@@ -637,7 +645,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 /* Panels flottants */
 .burger-panel {
   position: absolute;
-  top: 24px;           /* juste sous les boutons */
+  top: 32px;           /* juste sous les boutons */
   width: 90%;
   max-height: 70%;
   background: rgba(10,10,24,0.96);

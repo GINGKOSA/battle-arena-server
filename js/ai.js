@@ -132,7 +132,7 @@ function renderActionPanel() {
     var grid = document.getElementById('actions-grid');
     grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">💀 Tu as été éliminé.</div>';
     document.getElementById('waiting-action').style.display = 'none';
-    document.getElementById('target-picker').style.display  = 'none';
+    document.getElementById('target-picker').classList.remove('visible');
   } else {
     var grid = document.getElementById('actions-grid');
     grid.innerHTML = '';
@@ -144,7 +144,7 @@ function renderActionPanel() {
       grid.appendChild(btn);
     });
     document.getElementById('waiting-action').style.display = 'none';
-    document.getElementById('target-picker').style.display  = 'none';
+    document.getElementById('target-picker').classList.remove('visible');
     document.querySelectorAll('#actions-grid .action-btn').forEach(b => b.disabled = false);
   }
 
@@ -215,7 +215,11 @@ function aiChooseMove(me, alive) {
 
       if (heal && pct < 0.35) return heal;
 
-      const target = alive.find(p => p.slot !== me.slot);
+      const isTeamMode = G.mode === '2v2' && me.team !== null && me.team !== undefined;
+      const potentialTargets = isTeamMode
+        ? alive.filter(p => p.team !== me.team)
+        : alive.filter(p => p.slot !== me.slot);
+      const target = potentialTargets[0];
       if (target && target.hp <= big.dmg) return big; // kill shot
       if (pct < 0.5 && heal) return heal;             // soigner si en danger
 
@@ -240,22 +244,36 @@ function aiChooseMove(me, alive) {
 }
 
 function aiChooseTarget(me, alive, move) {
-  if (move.heal) return me; // soin = se soigner soi-même
+  // FIX: en 2v2, distinguer alliés et ennemis selon me.team
+  const isTeamMode = G.mode === '2v2' && me.team !== null && me.team !== undefined;
 
-  const enemies = alive.filter(p => p.slot !== me.slot);
+  if (move.heal) {
+    if (isTeamMode) {
+      // Soigner le coéquipier le plus blessé (ou soi-même si le plus bas)
+      const allies = alive.filter(p => p.team === me.team);
+      return allies.reduce((a, b) => b.hp < a.hp ? b : a, me);
+    }
+    return me; // hors 2v2 : se soigner soi-même
+  }
+
+  // FIX: ne cibler que les ennemis (équipe adverse en 2v2, tout le monde sinon)
+  const enemies = isTeamMode
+    ? alive.filter(p => p.team !== me.team)
+    : alive.filter(p => p.slot !== me.slot);
+
   if (!enemies.length) return null;
 
   switch (AI.level) {
     case 'easy':
-      // Cible aléatoire
+      // Cible aléatoire parmi les ennemis
       return enemies[Math.floor(Math.random() * enemies.length)];
 
     case 'hard':
-      // Cible le joueur humain avec le moins de HP (finish him)
+      // Cible l'ennemi avec le moins de HP (finish him)
       return enemies.reduce((a, b) => b.hp < a.hp ? b : a);
 
     default:
-      // Cible le joueur humain (slot 0 = le vrai joueur)
+      // Cible le joueur humain en priorité, sinon le premier ennemi
       return enemies.find(p => p.slot === G.mySlot) || enemies[0];
   }
 }
