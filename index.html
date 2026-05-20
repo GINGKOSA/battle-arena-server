@@ -296,6 +296,38 @@ function createPublicLobby() {
   }
 }
 
+/* ── Fonctions IA lobby Discord ── */
+function aiSelectCountLobby(btn) {
+  document.querySelectorAll('.ai-count-btn-lobby').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const count = +btn.dataset.count;
+  const row = document.getElementById('lobby-ai-mode-row');
+  if (row) row.style.display = count === 4 ? 'flex' : 'none';
+  if (count === 3) {
+    document.querySelectorAll('.ai-mode-btn-lobby').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === 'ffa');
+    });
+  }
+}
+
+function aiSelectModeLobby(btn) {
+  document.querySelectorAll('.ai-mode-btn-lobby').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function launchVsAIFromLobby() {
+  const level    = document.getElementById('ai-level-lobby')?.value || 'normal';
+  const countBtn = document.querySelector('.ai-count-btn-lobby.active');
+  const count    = countBtn ? +countBtn.dataset.count : 2;
+  const modeBtn  = document.querySelector('.ai-mode-btn-lobby.active');
+  const mode     = count === 2 ? '1v1' : count === 3 ? 'ffa' : (modeBtn?.dataset.mode || 'ffa');
+
+  if (typeof AI !== 'undefined') AI.level = level;
+  if (typeof stopPolls === 'function') stopPolls();
+  if (typeof startVsAI === 'function') startVsAI(count, mode);
+  else alert('Erreur : module IA non chargé');
+}
+
 function pkmTab(btn, name) {
   document.querySelectorAll('.pkm-tab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.pkm-tabcontent').forEach(c => c.classList.remove('active'));
