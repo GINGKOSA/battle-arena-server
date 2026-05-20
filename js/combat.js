@@ -381,7 +381,7 @@ function renderActionPanel() {
   var tp = document.getElementById('target-picker');
   if (tp) tp.classList.remove('visible');
   var ag = document.getElementById('actions-grid');
-  if (ag) ag.style.display = '';
+  if (ag) ag.style.display = 'grid';
   document.querySelectorAll('#actions-grid .action-btn').forEach(function(b){ b.disabled = false; });
 
   // Mode IA : déclencher le tour des bots
@@ -453,8 +453,8 @@ function showTargetPicker(move, targets, me) {
   // Cacher la grille d'attaques, afficher le picker en 2×2
   var grid   = document.getElementById('actions-grid');
   var picker = document.getElementById('target-picker');
-  if (grid)   grid.style.display   = 'none';
-  if (picker) picker.innerHTML = '';
+  if (grid)   { grid.style.display = 'none'; }
+  if (picker) { picker.classList.remove('visible'); picker.innerHTML = ''; }
 
   // Remplir jusqu'à 4 slots pour avoir toujours une grille 2×2
   // Les slots vides sont des boutons transparents/disabled
@@ -492,7 +492,7 @@ function showTargetPicker(move, targets, me) {
     btn.onclick = (function(slot) {
       return function() {
         picker.classList.remove('visible');
-        if (grid) grid.style.display = '';
+        if (grid) grid.style.display = 'grid';
         submitAction(move, slot);
       };
     })(p.slot);
@@ -513,7 +513,7 @@ function submitAction(move, targetSlot) {
 
   document.querySelectorAll('#actions-grid .action-btn').forEach(function(b){ b.disabled = true; });
   document.getElementById('target-picker').style.display  = 'none';
-  document.getElementById('waiting-action').style.display = 'block';
+  document.getElementById('waiting-action').style.display = 'flex';
 
   /* FIX: send envoie le move complet tel quel — les propriétés heal/dmg/acc
      sont des primitives, elles survivent à la sérialisation JSON sans problème */

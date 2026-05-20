@@ -205,7 +205,7 @@ h1{font-family:'Orbitron',sans-serif;font-size:clamp(13px,2.5vw,18px);letter-spa
   height: 39.5%;
   overflow: hidden;
   border-radius: 3px;
-  background: #040410;
+  background: #d8d4b8;
   display: flex;
   flex-direction: column;
 }
@@ -251,7 +251,7 @@ h1{font-family:'Orbitron',sans-serif;font-size:clamp(13px,2.5vw,18px);letter-spa
 
 /* ── Actions tab ── */
 #tab-actions{padding:5px;gap:4px;overflow-y:auto}
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:4px;flex-shrink:0}
+/* .actions — remplacé par #actions-grid.actions */
 .action-btn{
   padding:5px 6px;
   background:var(--panel);border:1px solid var(--border);border-radius:6px;
@@ -343,9 +343,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 }
 
 /* Les écrans passent au-dessus de l'image */
-#top-screen, #bottom-screen{
-  z-index:1;
-}
+#top-screen, 
 
 /* ══════════════════════════════════════════════════
    STYLE POKÉMON DS — Écran du bas + barres HP
@@ -415,31 +413,29 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 }
 
 /* ── Bottom screen layout ── */
-#bottom-screen {
-  display: flex;
-  flex-direction: column;
-  background: #d8d4b8;
-  position: relative;
-}
+
 
 /* Grille principale — prend tout l'espace disponible */
 #pkm-move-grid {
-  flex: 1;
-  padding: 6px;
-  padding-top: 26px; /* espace pour les boutons burger */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Grille 2×2 — remplit tout l'espace */
-#actions-grid.actions {
+  position: absolute;
+  left: 0; right: 0;
+  top: 28px; bottom: 0;
+  padding: 5px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
   gap: 5px;
-  flex: 1;
-  height: 100%;
+  overflow: hidden;
+}
+
+#actions-grid {
+  position: absolute;
+  left: 5px; right: 5px;
+  top: 28px; bottom: 5px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
 }
 
 /* Bouton attaque — grand, prend toute la cellule */
@@ -479,33 +475,28 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
   font-weight: 600;
 }
 
-/* Waiting */
+/* Waiting — overlay absolu par-dessus la grille */
 #waiting-action {
   display: none;
   position: absolute;
-  inset: 0;
-  top: 26px;
+  left: 5px; right: 5px;
+  top: 28px; bottom: 5px;
   align-items: center;
   justify-content: center;
   font-size: clamp(9px,1.4vw,13px);
   color: #555;
   font-weight: 700;
   background: rgba(216,212,184,0.92);
-  z-index: 5;
+  z-index: 10;
 }
 
 /* ── Target picker — remplace la grille 2×2 ── */
 #target-picker {
   display: none;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 5px;
-  flex: 1;
-  height: 100%;
 }
-/* Quand visible : même grille que les attaques */
+/* Quand visible : les boutons remontent dans la grille pkm-move-grid */
 #target-picker.visible {
-  display: grid;
+  display: contents;
 }
 
 .target-btn {
@@ -538,38 +529,8 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 .team-badge.ice  { background:rgba(34,170,255,.15);color:#0055aa;border:1px solid rgba(34,170,255,.4) }
 .picker-label { display:none } /* plus besoin du label, les boutons sont évidents */
 
-/* ── Log + chat compacts ── */
-#pkm-sub-area {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  max-height: 30%;
-  overflow: hidden;
-  background: #ccc9aa;
-  border-top: 1px solid #aaa89a;
-}
-#pkm-tabs {
-  display: flex;
-  border-bottom: 1px solid #aaa89a;
-  flex-shrink: 0;
-}
-.pkm-tab {
-  flex: 1; padding: 2px 4px;
-  background: transparent; border: none;
-  border-right: 1px solid #aaa89a;
-  color: #555;
-  font-family: 'Exo 2', sans-serif;
-  font-size: clamp(7px,1vw,10px);
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .1s;
-}
-.pkm-tab:last-child { border-right: none }
-.pkm-tab:hover { background: #ddd9ba }
-.pkm-tab.active { background: #ddd9ba; color: #cc3300; border-bottom: 2px solid #cc3300 }
-
-.pkm-tabcontent { display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0 }
-.pkm-tabcontent.active { display:flex }
+/* ── Anciens styles tabs — masqués (remplacés par burger) ── */
+#pkm-sub-area, #pkm-tabs, .pkm-tab, .pkm-tabcontent { display:none !important; }
 
 #combat-log-messages, #chat-messages {
   flex: 1; overflow-y: auto;
@@ -628,9 +589,7 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;letter
 }
 
 /* L'écran du bas n'a plus la dialog box — réajuster */
-#bottom-screen {
-  background: #d8d4b8;
-}
+
 
 /* Barre HP coéquipier (2v2) — bordure verte plus claire */
 .pkm-hp-box.ally-team {
