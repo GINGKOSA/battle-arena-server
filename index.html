@@ -120,6 +120,32 @@
         <button class="btn primary" onclick="createRoom()">⚔️ Créer</button>
       </div>
     </div>
+
+    <!-- ═══ VS IA (lobby Discord) ═══ -->
+    <div id="lobby-ai-section" style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Jouer contre l'IA</div>
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="ai-count-btn-lobby mode-pill active" data-count="2" onclick="aiSelectCountLobby(this)">👤 1v1</button>
+        <button class="ai-count-btn-lobby mode-pill"        data-count="3" onclick="aiSelectCountLobby(this)">👥 3 joueurs</button>
+        <button class="ai-count-btn-lobby mode-pill"        data-count="4" onclick="aiSelectCountLobby(this)">👥 4 joueurs</button>
+      </div>
+
+      <div id="lobby-ai-mode-row" style="display:none;gap:6px;flex-wrap:wrap">
+        <button class="ai-mode-btn-lobby mode-pill active" data-mode="ffa" onclick="aiSelectModeLobby(this)">💥 FFA</button>
+        <button class="ai-mode-btn-lobby mode-pill"        data-mode="2v2" onclick="aiSelectModeLobby(this)">🛡️ 2v2</button>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="ai-level-lobby" style="background:#0a0a18;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-family:'Exo 2',sans-serif;font-size:13px;color:var(--text);outline:none">
+          <option value="easy">😴 Facile</option>
+          <option value="normal" selected>⚔️ Normal</option>
+          <option value="hard">💀 Difficile</option>
+        </select>
+        <button class="btn primary" onclick="launchVsAIFromLobby()">🤖 Jouer vs IA</button>
+      </div>
+    </div>
+
   </div>
 
   <!-- ═══ GAME ═══ -->
@@ -239,6 +265,37 @@
 <script src="js/combat.js"></script>
 <script src="js/ai.js"></script>
 <script>
+// Fallback si network.js pas encore chargé
+function createPublicLobby() {
+  if (typeof api !== 'function') {
+    alert('Non connecté à Discord — utilise le mode sans compte pour jouer.');
+    return;
+  }
+  // Déléguer à network.js
+  if (typeof window._createPublicLobby === 'function') {
+    window._createPublicLobby();
+  } else {
+    // Inline si network.js pas à jour
+    (async () => {
+      try {
+        const data = await api('/lobby/create', 'POST', { maxSlots: 4, mode: '1v1' });
+        if (!data.room) { alert('Erreur création lobby'); return; }
+        G.roomId       = data.room;
+        G.isHost       = true;
+        G.mySlot       = 0;
+        G.mode         = '1v1';
+        G.lobbyPlayers = [{ slot:0, pseudo:G.myPseudo, avatar:G.myProfile?.avatar||null, ready:false }];
+        G.phase        = 'lobby';
+        stopPolls();
+        showScreen('game');
+        renderLobby();
+        await startHost();
+        startPolls();
+      } catch(e) { console.error('createPublicLobby', e); alert('Erreur: ' + e.message); }
+    })();
+  }
+}
+
 function pkmTab(btn, name) {
   document.querySelectorAll('.pkm-tab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.pkm-tabcontent').forEach(c => c.classList.remove('active'));

@@ -297,3 +297,39 @@ function launchVsAI() {
   startVsAI(count, mode);
 }
 
+
+/* ══════════════════════════════════════
+   UI — Boutons IA depuis le lobby Discord
+══════════════════════════════════════ */
+function aiSelectCountLobby(btn) {
+  document.querySelectorAll('.ai-count-btn-lobby').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const count = +btn.dataset.count;
+  const modeRow = document.getElementById('lobby-ai-mode-row');
+  if (modeRow) modeRow.style.display = count === 4 ? 'flex' : 'none';
+  if (count === 3) {
+    document.querySelectorAll('.ai-mode-btn-lobby').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === 'ffa');
+    });
+  }
+}
+
+function aiSelectModeLobby(btn) {
+  document.querySelectorAll('.ai-mode-btn-lobby').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function launchVsAIFromLobby() {
+  AI.level = document.getElementById('ai-level-lobby')?.value || 'normal';
+
+  const countBtn = document.querySelector('.ai-count-btn-lobby.active');
+  const count    = countBtn ? +countBtn.dataset.count : 2;
+
+  const modeBtn  = document.querySelector('.ai-mode-btn-lobby.active');
+  const mode     = count === 2 ? '1v1' : count === 3 ? 'ffa' : (modeBtn?.dataset.mode || 'ffa');
+
+  // Arrêter les polls Discord avant de lancer
+  if (typeof stopPolls === 'function') stopPolls();
+
+  startVsAI(count, mode);
+}

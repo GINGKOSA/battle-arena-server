@@ -34,7 +34,7 @@ h1{font-family:'Orbitron',sans-serif;font-size:clamp(13px,2.5vw,18px);letter-spa
 .login-sub{font-size:13px;color:var(--muted);line-height:1.6;max-width:400px}
 
 /* ── Lobby screen ── */
-#lobby-screen{display:none;flex-direction:column;gap:12px}
+#lobby-screen{display:none;flex-direction:column;gap:12px;overflow-y:auto;max-height:calc(100vh - 80px);padding-bottom:16px}
 #profile-bar{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:12px}
 .profile-avatar{width:38px;height:38px;border-radius:50%;border:2px solid var(--discord);object-fit:cover;flex-shrink:0}
 .profile-name{font-weight:600;font-size:14px}
